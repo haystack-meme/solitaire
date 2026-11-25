@@ -39,6 +39,7 @@
   .card .mid { position:absolute; right:6%; bottom:4%; font-size:calc(var(--cw)*.5); line-height:1; }
   .card.down { background:repeating-linear-gradient(45deg,#2456a8 0 4px,#1d4790 4px 8px); border:2px solid #fff; }
   .card.down > * { display:none; }
+  #table.noanim .card { transition:none; }
   .card.drag { transition:none; z-index:1000 !important; box-shadow:0 6px 14px rgba(0,0,0,.5); }
   .card.hint { box-shadow:0 0 0 3px #ffd54a; }
   #win { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.55); z-index:2000; }
@@ -142,7 +143,7 @@ function load() {
 }
 
 // ---------- rules ----------
-const top = p => p[p.length - 1];
+const lastCard = p => p[p.length - 1];
 function pile(id) {
   if (id === 'stock') return S.stock;
   if (id === 'waste') return S.waste;
@@ -150,11 +151,11 @@ function pile(id) {
 }
 function canFoundation(cards, fi) {
   if (cards.length !== 1) return false;
-  const c = cards[0], f = S.f[fi], t = top(f);
+  const c = cards[0], f = S.f[fi], t = lastCard(f);
   return t ? t.s === c.s && c.r === t.r + 1 : c.r === 1;
 }
 function canTableau(cards, ti) {
-  const c = cards[0], t = top(S.t[ti]);
+  const c = cards[0], t = lastCard(S.t[ti]);
   return t ? t.up && isRed(t.s) !== isRed(c.s) && c.r === t.r - 1 : c.r === 13;
 }
 function canDrop(cards, to) {
@@ -164,7 +165,7 @@ function move(from, idx, to) {
   pushUndo();
   const src = pile(from), cards = src.splice(idx);
   pile(to).push(...cards);
-  if (src.length && from[0] === 't' && !top(src).up) top(src).up = true;
+  if (src.length && from[0] === 't' && !lastCard(src).up) lastCard(src).up = true;
   S.moves++;
   after();
 }
@@ -223,7 +224,7 @@ function autoFinish() {
   if (S.won) return;
   for (let i = 0; i < 7; i++) {
     const t = S.t[i];
-    if (t.length) for (let f = 0; f < 4; f++) if (canFoundation([top(t)], f)) {
+    if (t.length) for (let f = 0; f < 4; f++) if (canFoundation([lastCard(t)], f)) {
       move('t' + i, t.length - 1, 'f' + f);
       return setTimeout(autoFinish, 90);
     }
@@ -381,7 +382,10 @@ setInterval(() => {
   if (S.time % 10 === 0) save();
 }, 1000);
 
-addEventListener('resize', layout);
+addEventListener('resize', () => {
+  table.classList.add('noanim'); layout();
+  requestAnimationFrame(() => requestAnimationFrame(() => table.classList.remove('noanim')));
+});
 document.addEventListener('visibilitychange', () => document.hidden && save());
 document.addEventListener('gesturestart', e => e.preventDefault());   // block iOS pinch zoom
 
