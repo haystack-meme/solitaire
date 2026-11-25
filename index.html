@@ -588,20 +588,31 @@ document.addEventListener('visibilitychange', () => {
 });
 document.addEventListener('pointerdown', unlockAudio, true);
 
-// Soft tap: a quiet, round sine "tap" (~600 Hz). No noise (no hiss), nothing low (no thump).
-// Eased 10 ms fade-in so there's no click, then a 70 ms fade-out.
-function tap(freq, { peak = 0.05, attack = 0.010, release = 0.070, delay = 0 } = {}) {
-  const t = actx.currentTime + 0.01 + delay, end = t + attack + release;
-  const o = actx.createOscillator(), g = actx.createGain(), lp = actx.createBiquadFilter();
-  o.type = 'sine';
-  o.frequency.setValueAtTime(freq, t);
-  o.frequency.linearRampToValueAtTime(freq * 0.97, end);          // tiny drop: a tap, not a beep
-  lp.type = 'lowpass'; lp.frequency.value = 1500;
-  g.gain.setValueAtTime(0, t);
-  for (let i = 1; i <= 8; i++) g.gain.linearRampToValueAtTime(peak * (1 - Math.cos(Math.PI * i / 8)) / 2, t + attack * i / 8);
-  g.gain.linearRampToValueAtTime(0, end);
-  o.connect(lp).connect(g).connect(master);
-  o.start(t); o.stop(end + 0.02);
+// Soft tap: like a fingertip on a table. Mostly a ~25 ms burst of soft noise (the contact) plus a tiny
+// tone that dies within ~20 ms (a hint of body). Too short to hear as a pitch, so it's a tap, not a beep.
+let tapNoise = null;
+function tap(freq, { peak = 0.05, delay = 0 } = {}) {
+  if (!tapNoise) {
+    tapNoise = actx.createBuffer(1, actx.sampleRate * 0.5, actx.sampleRate);
+    const d = tapNoise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
+  const t = actx.currentTime + 0.01 + delay;
+  // contact: band-limited noise, 2 ms rise, ~25 ms fall
+  const n = actx.createBufferSource(), bp = actx.createBiquadFilter(), ng = actx.createGain();
+  n.buffer = tapNoise; bp.type = 'bandpass'; bp.frequency.value = freq * 3.2; bp.Q.value = 1;
+  ng.gain.setValueAtTime(0, t);
+  ng.gain.linearRampToValueAtTime(peak, t + 0.002);
+  ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.027);
+  n.connect(bp).connect(ng).connect(master);
+  n.start(t, Math.random() * 0.4); n.stop(t + 0.04);
+  // body: a very short, quiet tone that drops in pitch
+  const o = actx.createOscillator(), og = actx.createGain();
+  o.type = 'sine'; o.frequency.setValueAtTime(freq, t); o.frequency.exponentialRampToValueAtTime(freq * 0.7, t + 0.02);
+  og.gain.setValueAtTime(0, t);
+  og.gain.linearRampToValueAtTime(peak * 0.5, t + 0.002);
+  og.gain.exponentialRampToValueAtTime(0.0001, t + 0.022);
+  o.connect(og).connect(master);
+  o.start(t); o.stop(t + 0.03);
 }
 // Win: soft muted plucks (the "Pluck" test's win).
 function pluck(freq, delay) {
@@ -757,7 +768,7 @@ document.addEventListener('touchend', e => {
 document.addEventListener('dblclick', e => e.preventDefault());
 
 if (!load()) deal(Date.now()); else { layout(); $('time').textContent = fmt(S.time); }
-const APP_VERSION = 'v45';
+const APP_VERSION = 'v46';
 $('ver').textContent = 'Version ' + APP_VERSION;
 function toast(msg, ms = 3000) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
@@ -775,15 +786,32 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
 // Reload button (home-screen apps have no pull-to-refresh). The game is saved first, so it
 // carries on where it was. Fetches the newest service worker too, so updates land right away.
 $('reloadBtn').disabled = false;          // never restore a stale disabled state after reloading
+// Check for Update: first ask the server which version is current (fast, with a time limit).
+// Only reload if there is something new; never leave the spinner running.
+async function latestVersion() {
+  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 6000);
+  try {
+    const res = await fetch('./index.html?check=' + Date.now(), { cache: 'no-store', signal: ctl.signal });
+    const m = (await res.text()).match(/const APP_VERSION = '([^']+)'/);
+    return m ? m[1] : null;
+  } catch { return null; } finally { clearTimeout(timer); }
+}
 $('reloadBtn').onclick = async () => {
-  if ($('reloadBtn').classList.contains('spin')) return;
-  $('reloadBtn').classList.add('spin');
+  const btn = $('reloadBtn');
+  if (btn.classList.contains('spin')) return;
+  btn.classList.add('spin');
+  const stop = msg => { btn.classList.remove('spin'); if (msg) toast(msg); };
   save();
+  const latest = await latestVersion();
+  if (!latest) return stop("Can't reach the server. Try again later.");
+  if (latest === APP_VERSION) return stop("You're up to date (" + APP_VERSION + ')');
+  toast('Updating to ' + latest + '…');
   try {
     const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration();
-    if (reg) await Promise.race([reg.update(), new Promise(r => setTimeout(r, 3000))]);
+    if (reg) await Promise.race([reg.update(), new Promise(r => setTimeout(r, 4000))]);
   } catch {}
-  location.reload();
+  setTimeout(() => stop('Update is taking a while. Close and reopen the app.'), 12000);
+  location.replace('./?v=' + Date.now());
 };
 
 // ---------- install button ----------
