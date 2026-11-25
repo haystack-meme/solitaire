@@ -593,17 +593,37 @@ document.addEventListener('pointerdown', unlockAudio, true);
 const SOUND_LEAD = 0.06;
 const soundStart = () => actx.currentTime + SOUND_LEAD + (actx.baseLatency || 0);
 
-// Swell: a plain, quiet sine that fades in and back out in straight ramps. Nothing hits.
-// Based on the "slow fade-in tone" from the sound test (which was 0.5 s in, 0.3 s out).
-const SWELL_IN = 0.25, SWELL_OUT = 0.2;
-function swell(freq, { peak = 0.04, fadeIn = SWELL_IN, fadeOut = SWELL_OUT, delay = 0 } = {}) {
-  const t = soundStart() + delay, o = actx.createOscillator(), g = actx.createGain();
-  g.gain.value = 0; o.type = 'sine'; o.frequency.value = freq;
+// Swell: soft pink noise (no pitch, so nothing rings) with smooth straight-ramp fade in and out
+// (nothing hits). Its brightness sweeps gently up on an S-curve. Muffled: 300 Hz - 2 kHz.
+const SWELL_IN = 0.12, SWELL_OUT = 0.15;
+let swellNoise = null;
+function swell(f1, { f2 = f1 * 2, peak = 0.09, fadeIn = SWELL_IN, fadeOut = SWELL_OUT, delay = 0 } = {}) {
+  if (!swellNoise) {
+    const len = actx.sampleRate; swellNoise = actx.createBuffer(1, len, actx.sampleRate);
+    const d = swellNoise.getChannelData(0); let b0 = 0, b1 = 0, b2 = 0;
+    for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1;
+      b0 = .99765 * b0 + w * .099046; b1 = .963 * b1 + w * .2965164; b2 = .57 * b2 + w * 1.0526913;
+      d[i] = (b0 + b1 + b2 + w * .1848) * .2; }
+  }
+  const t = soundStart() + delay, dur = fadeIn + fadeOut;
+  const src = actx.createBufferSource(), hp = actx.createBiquadFilter(), bp = actx.createBiquadFilter(),
+        lp = actx.createBiquadFilter(), g = actx.createGain();
+  g.gain.value = 0;
+  src.buffer = swellNoise; src.loop = true;
+  hp.type = 'highpass'; hp.frequency.value = 300; hp.Q.value = 0.5;
+  lp.type = 'lowpass'; lp.frequency.value = 2000; lp.Q.value = 0.5;
+  bp.type = 'bandpass'; bp.Q.value = 0.7;
+  bp.frequency.setValueAtTime(f1, t);
+  for (let i = 1; i <= 12; i++) {
+    const x = i / 12;
+    bp.frequency.linearRampToValueAtTime(f1 * Math.pow(f2 / f1, (1 - Math.cos(Math.PI * x)) / 2), t + dur * x);
+  }
   g.gain.setValueAtTime(0, t);
+  peak *= 0.55;                              // keep it quiet
   g.gain.linearRampToValueAtTime(peak, t + fadeIn);
-  g.gain.linearRampToValueAtTime(0, t + fadeIn + fadeOut);
-  o.connect(g).connect(master);
-  o.start(t); o.stop(t + fadeIn + fadeOut + 0.02);
+  g.gain.linearRampToValueAtTime(0, t + dur);
+  src.connect(hp).connect(bp).connect(lp).connect(g).connect(master);
+  src.start(t, Math.random() * 0.5); src.stop(t + dur + 0.02);
 }
 // Win: soft muted plucks (the "Pluck" test's win).
 function pluck(freq, delay) {
@@ -626,11 +646,11 @@ function playSfx(name) {
   switch (name) {
     case 'place':      swell(800); break;
     case 'foundation': swell(900); break;
-    case 'draw':       swell(950, { peak: 0.03, fadeIn: 0.18, fadeOut: 0.15 }); break;
-    case 'undo':       swell(700, { peak: 0.03 }); break;
-    case 'recycle':    swell(800, { peak: 0.03, fadeIn: 0.3, fadeOut: 0.3 }); break;
-    case 'shuffle':    swell(800, { peak: 0.03, fadeIn: 0.3, fadeOut: 0.25 }); break;
-    case 'nope':       swell(600, { peak: 0.025, fadeIn: 0.15, fadeOut: 0.15 }); break;
+    case 'draw':       swell(950, { peak: 0.07, fadeIn: 0.09, fadeOut: 0.12 }); break;
+    case 'undo':       swell(1400, { f2: 700, peak: 0.07 }); break;                     // sweeps back down
+    case 'recycle':    swell(700, { peak: 0.07, fadeIn: 0.18, fadeOut: 0.2 }); break;
+    case 'shuffle':    swell(750, { peak: 0.07, fadeIn: 0.2, fadeOut: 0.2 }); break;
+    case 'nope':       swell(700, { f2: 600, peak: 0.05, fadeIn: 0.08, fadeOut: 0.1 }); break;
     case 'win':        [330, 415, 494, 659].forEach((f, i) => pluck(f, i * 0.13)); break;
   }
 }
@@ -760,7 +780,7 @@ document.addEventListener('touchend', e => {
 document.addEventListener('dblclick', e => e.preventDefault());
 
 if (!load()) deal(Date.now()); else { layout(); $('time').textContent = fmt(S.time); }
-const APP_VERSION = 'v56';
+const APP_VERSION = 'v57';
 $('ver').textContent = 'Version ' + APP_VERSION;
 function toast(msg, ms = 3000) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
