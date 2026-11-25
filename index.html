@@ -458,21 +458,23 @@ function layout() {
 // ---------- input: tap to auto-move, drag to place ----------
 let drag = null;
 table.addEventListener('pointerdown', e => {
+  // one finger at a time: a drag belongs to the pointer that started it; other fingers are ignored
+  if (drag || !e.isPrimary) return;
   const t = e.target.closest('.card, .slot');
-  if (!t || drag) return;
+  if (!t) return;
   const id = t.dataset.pile, idx = +t.dataset.idx;
-  if (id === 'stock') { drag = { stockTap: true }; return; }
+  if (id === 'stock') { drag = { stockTap: true, pointer: e.pointerId }; return; }
   const p = pile(id);
   if (idx < 0 || !p[idx] || !p[idx].up) return;
   if (id === 'waste' && idx !== p.length - 1) return;
   if (id[0] === 'f' && idx !== p.length - 1) return;
   const cards = p.slice(idx).map(cardEl);
-  drag = { from: id, idx, cards, sx: e.clientX, sy: e.clientY, moved: false,
+  drag = { pointer: e.pointerId, from: id, idx, cards, sx: e.clientX, sy: e.clientY, moved: false,
            starts: cards.map(c => [parseFloat(c.style.left), parseFloat(c.style.top)]) };
   table.setPointerCapture(e.pointerId);
 });
 table.addEventListener('pointermove', e => {
-  if (!drag || drag.stockTap) return;
+  if (!drag || drag.stockTap || e.pointerId !== drag.pointer) return;
   const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
   if (!drag.moved && Math.hypot(dx, dy) < 6) return;
   drag.moved = true;
@@ -480,7 +482,7 @@ table.addEventListener('pointermove', e => {
     c.style.left = drag.starts[i][0] + dx + 'px'; c.style.top = drag.starts[i][1] + dy + 'px'; });
 });
 function endDrag(e, cancelled) {
-  if (!drag) return;
+  if (!drag || e.pointerId !== drag.pointer) return;
   const d = drag; drag = null;
   if (d.stockTap) { if (!cancelled) drawStock(); return; }
   d.cards.forEach(c => c.classList.remove('drag'));
@@ -509,6 +511,7 @@ function endDrag(e, cancelled) {
 }
 table.addEventListener('pointerup', e => endDrag(e, false));
 table.addEventListener('pointercancel', e => endDrag(e, true));
+table.addEventListener('lostpointercapture', e => endDrag(e, true));   // never leave a drag hanging
 
 // ---------- buttons ----------
 $('undoBtn').onclick = () => { if (!undoStack.length) return; const t = S.time; S = JSON.parse(undoStack.pop()); S.time = t; S.moves++; save(); layout(); sfx('undo'); };
@@ -764,7 +767,7 @@ document.addEventListener('touchend', e => {
 document.addEventListener('dblclick', e => e.preventDefault());
 
 if (!load()) deal(Date.now()); else { layout(); $('time').textContent = fmt(S.time); }
-const APP_VERSION = 'v41';
+const APP_VERSION = 'v42';
 $('ver').textContent = 'Version ' + APP_VERSION;
 function toast(msg, ms = 3000) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
