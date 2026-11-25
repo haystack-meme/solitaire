@@ -588,51 +588,20 @@ document.addEventListener('visibilitychange', () => {
 });
 document.addEventListener('pointerdown', unlockAudio, true);
 
-// Gentle slide: warm (pink) noise kept between ~500 Hz and ~2.5 kHz, where phone speakers are smooth.
-// It swells in, holds briefly and glides out, with the pitch drifting up like a card moving across felt.
-let pinkBuf = null;
-const SLIDE_TIME = 0.4, SLIDE_VOL = 0.6;   // overall: quicker and quieter
-const SLIDE_RISE = 2.6;
-const SLIDE_BEND = 2;                       // pitch curve shape: 1 = steady climb, 2+ = flat start, sweeps up at the end                     // >1 strengthens the upward pitch curve (1 = as written)
-function slide(f1, f2, { peak = 0.05, attack = 0.07, hold = 0.04, release = 0.14, delay = 0 } = {}) {
-  peak *= SLIDE_VOL; attack *= SLIDE_TIME; hold *= SLIDE_TIME; release *= SLIDE_TIME;
-  // longer, eased fade-in; take the extra time out of the hold so the length stays the same
-  // swell-dominant shape (long eased rise, short fall) so it never reads as an impact
-  const extra = attack * 1.5; attack += extra; hold = Math.max(0.002, hold - extra); release *= 0.8;
-  f1 *= 0.85; f2 *= 0.85;                    // whole sound a bit lower = darker, less sharp
-  if (f2 > f1) f2 = f1 * Math.pow(f2 / f1, SLIDE_RISE);
-  if (!pinkBuf) {
-    pinkBuf = actx.createBuffer(1, actx.sampleRate, actx.sampleRate);
-    const d = pinkBuf.getChannelData(0); let b0 = 0, b1 = 0, b2 = 0;
-    for (let i = 0; i < d.length; i++) { const w = Math.random() * 2 - 1;
-      b0 = .99765 * b0 + w * .099046; b1 = .963 * b1 + w * .2965164; b2 = .57 * b2 + w * 1.0526913;
-      d[i] = (b0 + b1 + b2 + w * .1848) * .2; }
-  }
-  const t = actx.currentTime + 0.01 + delay, end = t + attack + hold + release;
-  const src = actx.createBufferSource(), hp = actx.createBiquadFilter(), bp = actx.createBiquadFilter(),
-        lp = actx.createBiquadFilter(), g = actx.createGain();
-  src.buffer = pinkBuf; src.loop = true;
-  hp.type = 'highpass'; hp.frequency.value = 700;   // between thumpy (500) and thin/bright (1200)
-  lp.type = 'lowpass'; lp.frequency.value = 1600; lp.Q.value = 0.5;
-  const lp2 = actx.createBiquadFilter(); lp2.type = 'lowpass'; lp2.frequency.value = 1700; lp2.Q.value = 0.5;   // steeper roll-off = less grain
-  const lp3 = actx.createBiquadFilter(); lp3.type = 'lowpass'; lp3.frequency.value = 1800; lp3.Q.value = 0.5;
-  bp.type = 'bandpass'; bp.Q.value = 0.8;   // wide = breathy, airy
-  const v = 0.93 + Math.random() * 0.14;
-  // accelerating sweep: f(x) = f1 * (f2/f1)^(x^BEND), drawn with short straight segments (Safari-safe)
-  bp.frequency.setValueAtTime(f1 * v, t);
-  for (let i = 1; i <= 12; i++) {
-    const x = i / 12;
-    bp.frequency.linearRampToValueAtTime(f1 * v * Math.pow(f2 / f1, Math.pow(x, SLIDE_BEND)), t + (end - t) * x);
-  }
-  // ease-in: S-curve from silence ((1 - cos) / 2), so the start is very gentle
-  // built from short straight segments (setValueCurveAtTime is fragile in Safari)
+// Soft tap: a quiet, round sine "tap" (~600 Hz). No noise (no hiss), nothing low (no thump).
+// Eased 10 ms fade-in so there's no click, then a 70 ms fade-out.
+function tap(freq, { peak = 0.05, attack = 0.010, release = 0.070, delay = 0 } = {}) {
+  const t = actx.currentTime + 0.01 + delay, end = t + attack + release;
+  const o = actx.createOscillator(), g = actx.createGain(), lp = actx.createBiquadFilter();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(freq, t);
+  o.frequency.linearRampToValueAtTime(freq * 0.97, end);          // tiny drop: a tap, not a beep
+  lp.type = 'lowpass'; lp.frequency.value = 1500;
   g.gain.setValueAtTime(0, t);
-  // squared S-curve: starts as a near-silent whisper and grows with the swoop
-  for (let i = 1; i <= 12; i++) g.gain.linearRampToValueAtTime(peak * Math.pow((1 - Math.cos(Math.PI * i / 12)) / 2, 2), t + attack * i / 12);
-  g.gain.setValueAtTime(peak, t + attack + hold);
-  g.gain.linearRampToValueAtTime(0, end);                    // glide out
-  src.connect(hp).connect(bp).connect(lp).connect(lp2).connect(lp3).connect(g).connect(master);
-  src.start(t, Math.random() * 0.5); src.stop(end + 0.05);
+  for (let i = 1; i <= 8; i++) g.gain.linearRampToValueAtTime(peak * (1 - Math.cos(Math.PI * i / 8)) / 2, t + attack * i / 8);
+  g.gain.linearRampToValueAtTime(0, end);
+  o.connect(lp).connect(g).connect(master);
+  o.start(t); o.stop(end + 0.02);
 }
 // Win: soft muted plucks (the "Pluck" test's win).
 function pluck(freq, delay) {
@@ -652,13 +621,13 @@ function sfx(name) {
 function playSfx(name) {
   if (!soundOn || !actx || actx.state !== 'running') return;
   switch (name) {
-    case 'place':      slide(950, 1200); break;
-    case 'foundation': slide(1050, 1320); break;
-    case 'draw':       slide(1150, 1450, { peak: 0.04, attack: 0.05, hold: 0.03, release: 0.12 }); break;
-    case 'undo':       slide(1300, 900, { peak: 0.04 }); break;                 // slides "backwards"
-    case 'recycle':    slide(850, 1100, { peak: 0.04, attack: 0.1, hold: 0.08, release: 0.22 }); break;
-    case 'shuffle':    for (let i = 0; i < 3; i++) slide(950, 1200, { peak: 0.035, attack: 0.05, hold: 0.02, release: 0.1, delay: i * 0.12 }); break;
-    case 'nope':       slide(700, 600, { peak: 0.035, attack: 0.04, hold: 0.02, release: 0.1 }); break;
+    case 'place':      tap(600); break;
+    case 'foundation': tap(680); break;
+    case 'draw':       tap(700, { peak: 0.035 }); break;
+    case 'undo':       tap(520, { peak: 0.035 }); break;
+    case 'recycle':    tap(600, { peak: 0.035 }); tap(680, { peak: 0.035, delay: 0.09 }); break;
+    case 'shuffle':    for (let i = 0; i < 3; i++) tap(600 + i * 40, { peak: 0.03, delay: i * 0.08 }); break;
+    case 'nope':       tap(440, { peak: 0.035 }); break;
     case 'win':        [330, 415, 494, 659].forEach((f, i) => pluck(f, i * 0.13)); break;
   }
 }
@@ -788,7 +757,7 @@ document.addEventListener('touchend', e => {
 document.addEventListener('dblclick', e => e.preventDefault());
 
 if (!load()) deal(Date.now()); else { layout(); $('time').textContent = fmt(S.time); }
-const APP_VERSION = 'v44';
+const APP_VERSION = 'v45';
 $('ver').textContent = 'Version ' + APP_VERSION;
 function toast(msg, ms = 3000) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
