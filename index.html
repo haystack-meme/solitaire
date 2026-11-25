@@ -123,6 +123,16 @@
   .seg { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
   .seg .btn:not(.on) { --top:#2b5a3d; --bot:#1c3f2a; --edge:#0c2416; opacity:.85; }
   .seg .btn.on { --top:#ffe07a; --bot:#f0a91e; --edge:#9a5f05; color:var(--ink); text-shadow:none; }
+  .vol { display:flex; align-items:center; gap:12px; padding:10px 14px; border-radius:14px;
+         background:rgba(0,0,0,.25); box-shadow:inset 0 2px 6px rgba(0,0,0,.35); }
+  .vol svg { width:26px; height:26px; color:var(--gold); flex:none; }
+  .vol span { font-family:var(--display); color:var(--gold); min-width:3.2ch; text-align:right; font-variant-numeric:tabular-nums; }
+  .vol input { flex:1; -webkit-appearance:none; appearance:none; height:10px; border-radius:6px; margin:0;
+               background:linear-gradient(90deg, var(--gold) var(--fill,50%), rgba(0,0,0,.45) var(--fill,50%));
+               box-shadow:inset 0 1px 2px rgba(0,0,0,.5); touch-action:pan-x; }
+  .vol input::-webkit-slider-thumb { -webkit-appearance:none; width:28px; height:28px; border-radius:50%;
+               background:linear-gradient(#ffe07a,#f0a91e); box-shadow:0 3px 0 #9a5f05, 0 4px 8px rgba(0,0,0,.4), inset 0 2px 0 rgba(255,255,255,.6); }
+  .vol input::-moz-range-thumb { width:28px; height:28px; border:0; border-radius:50%; background:#f0a91e; }
   .panel .small { font-size:12px; text-align:center; opacity:.6; }
   @keyframes pop { from { transform:scale(.7); opacity:0; } }
   @keyframes fade { from { opacity:0; } }
@@ -162,7 +172,6 @@
   <header>
     <div class="left">
       <button id="menuBtn" class="btn round" aria-label="Menu"><svg><use href="#i-menu"/></svg></button>
-      <button id="reloadBtn" class="btn round" aria-label="Reload" autocomplete="off"><svg><use href="#i-reload"/></svg></button>
     </div>
     <div class="plaque">
       <span><svg><use href="#i-moves"/></svg><span id="moves">0</span></span>
@@ -192,9 +201,14 @@
   <div class="ribbon">Menu</div>
   <div class="stack">
     <div class="seg"><button id="draw1" class="btn">Draw 1</button><button id="draw3" class="btn">Draw 3</button></div>
-    <button id="soundBtn" class="btn">Sound: on</button>
+    <div class="vol">
+      <svg viewBox="0 0 24 24"><path fill="currentColor" d="M4 9h4l5-4v14l-5-4H4z"/><path id="volWaves" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M16 9.5a3.5 3.5 0 0 1 0 5M18.5 7a7 7 0 0 1 0 10"/></svg>
+      <input id="volSlider" type="range" min="0" max="100" step="1" aria-label="Volume">
+      <span id="volLabel"></span>
+    </div>
     <button id="statsBtn" class="btn">Statistics</button>
     <button id="restart" class="btn">Restart Deal</button>
+    <button id="reloadBtn" class="btn" autocomplete="off"><svg><use href="#i-reload"/></svg>Check for Update</button>
     <button id="menuClose" class="btn gold">Resume</button>
     <div id="ver" class="small"></div>
   </div>
@@ -533,8 +547,16 @@ $('draw3').onclick = () => setDraw(3);
 $('restart').onclick = () => { $('menu').classList.remove('show'); deal(dealSeed); };
 
 // ---------- sound effects: soft synthesized clicks (Web Audio, no files) ----------
-let soundOn = true, actx = null, master = null;
-try { soundOn = localStorage.getItem('sol-sound') !== 'off'; } catch {}
+// Volume 0-100 from the menu slider (0 = off). Default 50 = half the old fixed level.
+const VOL_DEFAULT = 50, VOL_MAX_GAIN = 0.6;
+let volume = VOL_DEFAULT, actx = null, master = null;
+try {
+  const v = localStorage.getItem('sol-volume');
+  if (v !== null) volume = Math.max(0, Math.min(100, +v || 0));
+  else if (localStorage.getItem('sol-sound') === 'off') volume = 0;      // carry over the old on/off switch
+} catch {}
+const soundGain = () => (volume / 100) * VOL_MAX_GAIN;
+let soundOn = volume > 0;
 // 'ambient' = follows the iPhone's silent switch and mixes with other audio
 try { if (navigator.audioSession) navigator.audioSession.type = 'ambient'; } catch {}
 function unlockAudio() {
@@ -542,7 +564,7 @@ function unlockAudio() {
   if (!actx) {
     const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
     actx = new AC();
-    master = actx.createGain(); master.gain.value = 0.6; master.connect(actx.destination);
+    master = actx.createGain(); master.gain.value = soundGain(); master.connect(actx.destination);
   }
   if (actx.state !== 'running') actx.resume();
 }
@@ -604,14 +626,22 @@ function sfx(name) {
     case 'win':        [330, 415, 494, 659].forEach((f, i) => pluck(f, i * 0.13)); break;
   }
 }
-const showSound = () => { $('soundBtn').textContent = 'Sound: ' + (soundOn ? 'on' : 'off'); };
-$('soundBtn').onclick = () => {
-  soundOn = !soundOn;
-  try { localStorage.setItem('sol-sound', soundOn ? 'on' : 'off'); } catch {}
-  showSound();
-  if (soundOn) { unlockAudio(); setTimeout(() => sfx('place'), 50); }
-};
-showSound();
+function showVolume() {
+  $('volSlider').value = volume;
+  $('volSlider').style.setProperty('--fill', volume + '%');
+  $('volLabel').textContent = volume ? volume : 'Off';
+  $('volWaves').style.opacity = volume ? 1 : 0.15;
+}
+$('volSlider').addEventListener('input', e => {
+  volume = +e.target.value; soundOn = volume > 0;
+  if (master) master.gain.value = soundGain();
+  showVolume();
+});
+$('volSlider').addEventListener('change', () => {          // on release: save and play a sample at the new level
+  try { localStorage.setItem('sol-volume', String(volume)); } catch {}
+  if (soundOn) { unlockAudio(); setTimeout(() => sfx('place'), 30); }
+});
+showVolume();
 
 // ---------- statistics (per device, separate for Draw 1 and Draw 3) ----------
 const blankStats = () => ({ played: 0, won: 0, bestTime: null, bestMoves: null, streak: 0, bestStreak: 0 });
@@ -722,7 +752,7 @@ document.addEventListener('touchend', e => {
 document.addEventListener('dblclick', e => e.preventDefault());
 
 if (!load()) deal(Date.now()); else { layout(); $('time').textContent = fmt(S.time); }
-const APP_VERSION = 'v32';
+const APP_VERSION = 'v33';
 $('ver').textContent = 'Version ' + APP_VERSION;
 function toast(msg, ms = 3000) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
