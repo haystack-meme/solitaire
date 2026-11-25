@@ -207,7 +207,6 @@
       <span id="volLabel"></span>
     </div>
     <button id="statsBtn" class="btn">Statistics</button>
-    <button id="soundTest" class="btn">Sound Test (1 · 2 · 3)</button>
     <button id="restart" class="btn">Restart Deal</button>
     <button id="reloadBtn" class="btn" autocomplete="off"><svg><use href="#i-reload"/></svg>Check for Update</button>
     <button id="menuClose" class="btn gold">Resume</button>
@@ -594,40 +593,17 @@ document.addEventListener('pointerdown', unlockAudio, true);
 const SOUND_LEAD = 0.06;
 const soundStart = () => actx.currentTime + SOUND_LEAD + (actx.baseLatency || 0);
 
-// Swoosh: pink noise through a band-pass whose pitch sweeps steeply up (accelerating, exponential)
-// while the volume fades from start to finish. Short eased fade-in so the start never hits.
-let swooshNoise = null;
-// pitch follows an S-curve: flat at the start, steepest in the middle, flattens at the end
-const sCurve = x => (1 - Math.cos(Math.PI * x)) / 2;
-function swoosh({ f1 = 700, f2 = 2800, dur = 0.22, peak = 0.06, rise = 0.015, q = 1.4, delay = 0 } = {}) {
-  if (!swooshNoise) {
-    const len = actx.sampleRate; swooshNoise = actx.createBuffer(1, len, actx.sampleRate);
-    const d = swooshNoise.getChannelData(0); let b0 = 0, b1 = 0, b2 = 0;
-    for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1;
-      b0 = .99765 * b0 + w * .099046; b1 = .963 * b1 + w * .2965164; b2 = .57 * b2 + w * 1.0526913;
-      d[i] = (b0 + b1 + b2 + w * .1848) * .2; }
-  }
-  const t = soundStart() + delay, end = t + dur;
-  const src = actx.createBufferSource(), bp = actx.createBiquadFilter(), g = actx.createGain();
-  g.gain.value = 0;                         // silent from the moment it exists
-  src.buffer = swooshNoise; src.loop = true;
-  bp.type = 'bandpass'; bp.Q.value = q;
-  const v = 0.95 + Math.random() * 0.1;
-  bp.frequency.setValueAtTime(f1 * v, t);
-  for (let i = 1; i <= 16; i++) {
-    const x = i / 16;
-    bp.frequency.linearRampToValueAtTime(f1 * v * Math.pow(f2 / f1, sCurve(x)), t + dur * x);
-  }
-  // volume: eased fade-in, then falls away as the pitch climbs
+// Swell: a plain, quiet sine that fades in and back out in straight ramps. Nothing hits.
+// Based on the "slow fade-in tone" from the sound test (which was 0.5 s in, 0.3 s out).
+const SWELL_IN = 0.25, SWELL_OUT = 0.2;
+function swell(freq, { peak = 0.04, fadeIn = SWELL_IN, fadeOut = SWELL_OUT, delay = 0 } = {}) {
+  const t = soundStart() + delay, o = actx.createOscillator(), g = actx.createGain();
+  g.gain.value = 0; o.type = 'sine'; o.frequency.value = freq;
   g.gain.setValueAtTime(0, t);
-  for (let i = 1; i <= 6; i++) g.gain.linearRampToValueAtTime(peak * (1 - Math.cos(Math.PI * i / 6)) / 2, t + rise * i / 6);
-  for (let i = 1; i <= 12; i++) {
-    const x = i / 12;
-    g.gain.linearRampToValueAtTime(peak * Math.pow(1 - x, 1.6), t + rise + (dur - rise) * x);
-  }
-  const hp = actx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 300; hp.Q.value = 0.5;   // no sub-bass thud
-  src.connect(hp).connect(bp).connect(g).connect(master);
-  src.start(t, Math.random() * 0.5); src.stop(end + 0.02);
+  g.gain.linearRampToValueAtTime(peak, t + fadeIn);
+  g.gain.linearRampToValueAtTime(0, t + fadeIn + fadeOut);
+  o.connect(g).connect(master);
+  o.start(t); o.stop(t + fadeIn + fadeOut + 0.02);
 }
 // Win: soft muted plucks (the "Pluck" test's win).
 function pluck(freq, delay) {
@@ -648,35 +624,16 @@ function sfx(name) {
 function playSfx(name) {
   if (!soundOn || !actx || actx.state !== 'running') return;
   switch (name) {
-    case 'place':      swoosh(); break;
-    case 'foundation': swoosh({ f1: 800, f2: 3200 }); break;
-    case 'draw':       swoosh({ f1: 900, f2: 3200, dur: 0.16, peak: 0.045 }); break;
-    case 'undo':       swoosh({ f1: 2800, f2: 700, dur: 0.18, peak: 0.045 }); break;      // swooshes back down
-    case 'recycle':    swoosh({ f1: 500, f2: 2500, dur: 0.35, peak: 0.05 }); break;
-    case 'shuffle':    for (let i = 0; i < 3; i++) swoosh({ dur: 0.14, peak: 0.04, delay: i * 0.09 }); break;
-    case 'nope':       swoosh({ f1: 900, f2: 600, dur: 0.12, peak: 0.035 }); break;
+    case 'place':      swell(800); break;
+    case 'foundation': swell(900); break;
+    case 'draw':       swell(950, { peak: 0.03, fadeIn: 0.18, fadeOut: 0.15 }); break;
+    case 'undo':       swell(700, { peak: 0.03 }); break;
+    case 'recycle':    swell(800, { peak: 0.03, fadeIn: 0.3, fadeOut: 0.3 }); break;
+    case 'shuffle':    swell(800, { peak: 0.03, fadeIn: 0.3, fadeOut: 0.25 }); break;
+    case 'nope':       swell(600, { peak: 0.025, fadeIn: 0.15, fadeOut: 0.15 }); break;
     case 'win':        [330, 415, 494, 659].forEach((f, i) => pluck(f, i * 0.13)); break;
   }
 }
-// Temporary sound test: 1) a tone with a very slow 0.5 s fade-in (cannot "hit"), 2) the swoosh,
-// 3) the swoosh with a 0.5 s fade-in. If #1 still has a hammer at its start, the phone is adding it.
-function slowTone(delay) {
-  const t = soundStart() + delay, o = actx.createOscillator(), g = actx.createGain();
-  g.gain.value = 0; o.type = 'sine'; o.frequency.value = 800;
-  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.04, t + 0.5); g.gain.linearRampToValueAtTime(0, t + 0.8);
-  o.connect(g).connect(master); o.start(t); o.stop(t + 0.85);
-}
-$('soundTest').onclick = () => {
-  unlockAudio();
-  if (!soundOn) return toast('Turn the volume up first');
-  setTimeout(() => {
-    try {
-      toast('1: slow fade-in tone'); slowTone(0);
-      setTimeout(() => { toast('2: swoosh'); swoosh(); }, 1400);
-      setTimeout(() => { toast('3: swoosh, slow fade-in'); swoosh({ rise: 0.5, dur: 0.7 }); }, 2800);
-    } catch (e) { toast('Sound test failed: ' + e.message); }
-  }, 150);
-};
 function showVolume() {
   $('volSlider').value = volume;
   $('volSlider').style.setProperty('--fill', volume + '%');
@@ -803,7 +760,7 @@ document.addEventListener('touchend', e => {
 document.addEventListener('dblclick', e => e.preventDefault());
 
 if (!load()) deal(Date.now()); else { layout(); $('time').textContent = fmt(S.time); }
-const APP_VERSION = 'v55';
+const APP_VERSION = 'v56';
 $('ver').textContent = 'Version ' + APP_VERSION;
 function toast(msg, ms = 3000) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
