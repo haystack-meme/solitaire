@@ -549,7 +549,9 @@ document.addEventListener('pointerdown', unlockAudio, true);
 // Gentle slide: warm (pink) noise kept between ~500 Hz and ~2.5 kHz, where phone speakers are smooth.
 // It swells in, holds briefly and glides out, with the pitch drifting up like a card moving across felt.
 let pinkBuf = null;
+const SLIDE_TIME = 0.55, SLIDE_VOL = 0.6;   // overall: quicker and quieter
 function slide(f1, f2, { peak = 0.05, attack = 0.07, hold = 0.04, release = 0.14, delay = 0 } = {}) {
+  peak *= SLIDE_VOL; attack *= SLIDE_TIME; hold *= SLIDE_TIME; release *= SLIDE_TIME;
   if (!pinkBuf) {
     pinkBuf = actx.createBuffer(1, actx.sampleRate, actx.sampleRate);
     const d = pinkBuf.getChannelData(0); let b0 = 0, b1 = 0, b2 = 0;
@@ -716,7 +718,7 @@ document.addEventListener('touchend', e => {
 document.addEventListener('dblclick', e => e.preventDefault());
 
 if (!load()) deal(Date.now()); else { layout(); $('time').textContent = fmt(S.time); }
-const APP_VERSION = 'v28';
+const APP_VERSION = 'v29';
 $('ver').textContent = 'Version ' + APP_VERSION;
 function toast(msg, ms = 3000) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
