@@ -577,6 +577,8 @@ const SLIDE_TIME = 0.55, SLIDE_VOL = 0.6;   // overall: quicker and quieter
 const SLIDE_RISE = 2.5;                     // >1 strengthens the upward pitch curve (1 = as written)
 function slide(f1, f2, { peak = 0.05, attack = 0.07, hold = 0.04, release = 0.14, delay = 0 } = {}) {
   peak *= SLIDE_VOL; attack *= SLIDE_TIME; hold *= SLIDE_TIME; release *= SLIDE_TIME;
+  // longer, eased fade-in; take the extra time out of the hold so the length stays the same
+  const extra = attack * 0.6; attack += extra; hold = Math.max(0.002, hold - extra);
   if (f2 > f1) f2 = f1 * Math.pow(f2 / f1, SLIDE_RISE);
   if (!pinkBuf) {
     pinkBuf = actx.createBuffer(1, actx.sampleRate, actx.sampleRate);
@@ -596,8 +598,10 @@ function slide(f1, f2, { peak = 0.05, attack = 0.07, hold = 0.04, release = 0.14
   const v = 0.93 + Math.random() * 0.14;
   bp.frequency.setValueAtTime(f1 * v, t);
   bp.frequency.exponentialRampToValueAtTime(f2 * v, end);   // exponential: flat at first, lifts toward the end
-  g.gain.setValueAtTime(0, t);
-  g.gain.linearRampToValueAtTime(peak, t + attack);          // smooth swell, no edge
+  // ease-in: S-curve from silence ((1 - cos) / 2), so the start is very gentle
+  const curve = new Float32Array(48);
+  for (let i = 0; i < curve.length; i++) curve[i] = peak * (1 - Math.cos(Math.PI * i / (curve.length - 1))) / 2;
+  g.gain.setValueCurveAtTime(curve, t, attack);
   g.gain.setValueAtTime(peak, t + attack + hold);
   g.gain.linearRampToValueAtTime(0, end);                    // glide out
   src.connect(hp).connect(bp).connect(lp).connect(lp2).connect(g).connect(master);
@@ -753,7 +757,7 @@ document.addEventListener('touchend', e => {
 document.addEventListener('dblclick', e => e.preventDefault());
 
 if (!load()) deal(Date.now()); else { layout(); $('time').textContent = fmt(S.time); }
-const APP_VERSION = 'v36';
+const APP_VERSION = 'v37';
 $('ver').textContent = 'Version ' + APP_VERSION;
 function toast(msg, ms = 3000) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
