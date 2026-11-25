@@ -7,34 +7,79 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Solitaire">
-<meta name="theme-color" content="#166e3c">
+<meta name="theme-color" content="#0b3f22">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>Solitaire</title>
 <style>
-  :root { --felt:#166e3c; --cw:48px; --ch:67px; }
+  @font-face { font-family:'Lilita One'; src:url(fonts/lilita-one.woff2) format('woff2'); font-display:swap; }
+  :root {
+    --felt:#14683a; --felt-dark:#0b3f22; --cw:48px; --ch:67px;
+    --gold:#ffcf4a; --gold-dark:#c98a12; --wood:#6b3a1e; --wood-dark:#3e1f0e; --ink:#2a1608;
+    --display:'Lilita One', 'Arial Rounded MT Bold', system-ui, sans-serif;
+  }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-  html { background:var(--felt); }
+  html { background:var(--felt-dark); }
   html, body { margin:0; width:100%; height:100%; min-height:100dvh; overflow:hidden; overscroll-behavior:none; -webkit-text-size-adjust:100%; }
-  body { background:radial-gradient(circle at 50% 30%, #1f8a4d, var(--felt) 70%); color:#fff;
-         font-family:-apple-system, system-ui, sans-serif; -webkit-user-select:none; user-select:none;
-         -webkit-touch-callout:none; touch-action:none; }
+  body {
+    color:#fff; font-family:-apple-system, system-ui, sans-serif;
+    -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; touch-action:none;
+    background:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .5 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E"),
+      radial-gradient(ellipse at 50% 35%, #1f9150 0%, var(--felt) 45%, var(--felt-dark) 100%);
+  }
   #app { position:fixed; inset:0; padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
          display:flex; flex-direction:column; }
-  header { display:flex; align-items:center; justify-content:space-between; padding:8px 10px; gap:8px; font-size:14px; }
-  header .stats { opacity:.85; font-variant-numeric:tabular-nums; }
+
+  /* ---------- buttons: chunky, beveled, press down ---------- */
+  button { font:inherit; border:0; cursor:pointer; touch-action:manipulation; color:#fff; }
+  button[hidden] { display:none !important; }
+  .btn {
+    --top:#8a4b26; --bot:var(--wood); --edge:var(--wood-dark);
+    position:relative; display:inline-flex; align-items:center; justify-content:center; gap:6px;
+    font-family:var(--display); font-size:16px; letter-spacing:.3px; text-shadow:0 2px 0 rgba(0,0,0,.35);
+    padding:9px 14px; border-radius:14px;
+    background:linear-gradient(var(--top), var(--bot));
+    box-shadow:inset 0 2px 0 rgba(255,255,255,.25), inset 0 0 0 2px rgba(255,207,74,.55), 0 4px 0 var(--edge), 0 6px 10px rgba(0,0,0,.35);
+    transition:transform .06s, box-shadow .06s;
+  }
+  .btn:active, .btn.pressed { transform:translateY(3px);
+    box-shadow:inset 0 2px 0 rgba(255,255,255,.2), inset 0 0 0 2px rgba(255,207,74,.55), 0 1px 0 var(--edge), 0 2px 4px rgba(0,0,0,.35); }
+  .btn:disabled { filter:grayscale(.6) brightness(.8); }
+  .btn svg { width:22px; height:22px; flex:none; filter:drop-shadow(0 2px 0 rgba(0,0,0,.3)); }
+  .btn.round { width:46px; height:46px; padding:0; border-radius:50%; }
+  .btn.gold { --top:#ffe07a; --bot:#f0a91e; --edge:#9a5f05; color:var(--ink); text-shadow:0 1px 0 rgba(255,255,255,.5);
+              box-shadow:inset 0 2px 0 rgba(255,255,255,.6), inset 0 0 0 2px rgba(120,60,0,.35), 0 4px 0 var(--edge), 0 6px 10px rgba(0,0,0,.35); }
+  .btn.gold svg { filter:none; }
+  .btn.red  { --top:#e0574a; --bot:#a82418; --edge:#5c0f08; }
+  .btn.green{ --top:#3fbf6e; --bot:#1e8a45; --edge:#0d4a23; }
+
+  /* ---------- HUD ---------- */
+  header { display:flex; align-items:center; justify-content:space-between; padding:8px 10px 4px; gap:8px; }
+  header .left { display:flex; gap:8px; }
+  .plaque {
+    display:flex; gap:14px; align-items:center; padding:6px 14px; border-radius:12px;
+    background:linear-gradient(#4a2612, #2b1408); font-family:var(--display); font-size:17px; color:var(--gold);
+    box-shadow:inset 0 0 0 2px rgba(255,207,74,.6), inset 0 2px 6px rgba(0,0,0,.6), 0 3px 8px rgba(0,0,0,.4);
+    font-variant-numeric:tabular-nums; text-shadow:0 1px 0 #000;
+  }
+  .plaque span { display:flex; align-items:center; gap:5px; }
+  .plaque svg { width:16px; height:16px; opacity:.9; }
   #table { position:relative; flex:1; min-height:0; margin:0 auto; width:100%; max-width:640px; overflow:hidden; }
-  footer { display:flex; justify-content:space-around; padding:6px 4px 10px; }
-  button { font:inherit; font-size:15px; color:#fff; background:rgba(0,0,0,.25); border:0; border-radius:10px; padding:9px 14px; }
-  button { touch-action:manipulation; }
+  footer { display:flex; justify-content:center; gap:10px; padding:6px 10px 12px; flex-wrap:wrap; }
+  footer .btn { min-width:88px; padding:10px 14px; font-size:17px; }
+  #autoBtn { animation:pulse 1.1s ease-in-out infinite; }
+  @keyframes pulse { 50% { transform:scale(1.07); } }
+
   #verTag { position:absolute; right:calc(8px + env(safe-area-inset-right)); bottom:calc(2px + env(safe-area-inset-bottom));
-            font-size:10px; color:rgba(255,255,255,.35); pointer-events:none; }
-  #toast { position:fixed; left:50%; top:calc(56px + env(safe-area-inset-top)); transform:translate(-50%,-12px);
-           background:rgba(0,0,0,.75); color:#fff; padding:9px 16px; border-radius:20px; font-size:14px;
-           opacity:0; pointer-events:none; transition:opacity .3s, transform .3s; z-index:3000; white-space:nowrap; }
-  #toast.show { opacity:1; transform:translate(-50%,0); }
-  button:active { background:rgba(0,0,0,.45); }
-  button[hidden] { display:none; }
+            font-size:10px; color:rgba(255,255,255,.3); pointer-events:none; }
+  #toast { position:fixed; left:50%; top:calc(64px + env(safe-area-inset-top)); transform:translate(-50%,-12px) scale(.9);
+           background:linear-gradient(#ffe07a,#f0a91e); color:var(--ink); padding:8px 18px; border-radius:20px;
+           font-family:var(--display); font-size:16px; box-shadow:0 3px 0 #9a5f05, 0 6px 14px rgba(0,0,0,.4);
+           opacity:0; pointer-events:none; transition:opacity .3s, transform .3s cubic-bezier(.3,1.6,.5,1); z-index:3000; white-space:nowrap; }
+  #toast.show { opacity:1; transform:translate(-50%,0) scale(1); }
+
+  /* ---------- cards (unchanged) ---------- */
   .slot { position:absolute; width:var(--cw); height:var(--ch); border-radius:calc(var(--cw)*.12);
           border:2px solid rgba(255,255,255,.25); display:flex; align-items:center; justify-content:center;
           font-size:calc(var(--cw)*.5); color:rgba(255,255,255,.3); }
@@ -50,82 +95,125 @@
   #table.noanim .card { transition:none; }
   .card.drag { transition:none; z-index:1000 !important; box-shadow:0 6px 14px rgba(0,0,0,.5); }
   .card.hint { box-shadow:0 0 0 3px #ffd54a; }
-  #win { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.55); z-index:2000; }
-  #win.show { display:flex; }
-  #win div { background:#fff; color:#111; border-radius:16px; padding:22px 26px; text-align:center; }
-  #win button { background:var(--felt); margin-top:12px; }
-  #menu { position:fixed; inset:0; display:none; align-items:flex-end; justify-content:center; background:rgba(0,0,0,.45); z-index:2000; }
-  #menu.show { display:flex; }
-  #menu .sheet { background:#f2f2f7; color:#111; width:100%; max-width:480px; border-radius:16px 16px 0 0;
-                 padding:14px 14px calc(14px + env(safe-area-inset-bottom)); display:grid; gap:10px; }
-  #menu .sheet button { color:#111; background:#fff; padding:14px; font-size:17px; }
-  #menu .sheet button.on { background:#166e3c; color:#fff; }
-  #stats { position:fixed; inset:0; display:none; align-items:flex-end; justify-content:center; background:rgba(0,0,0,.45); z-index:2000; }
-  #stats.show { display:flex; }
-  #stats .sheet { background:#f2f2f7; color:#111; width:100%; max-width:480px; border-radius:16px 16px 0 0;
-                  padding:16px 18px calc(16px + env(safe-area-inset-bottom)); font-size:16px; }
-  #stats h3 { margin:0 0 10px; }
-  #stats table { width:100%; border-collapse:collapse; margin-bottom:14px; font-variant-numeric:tabular-nums; }
-  #stats th, #stats td { padding:8px 4px; text-align:right; border-bottom:1px solid #ddd; }
+
+  /* ---------- panels ---------- */
+  .overlay { position:fixed; inset:0; display:none; align-items:center; justify-content:center; padding:20px;
+             background:rgba(0,0,0,.55); z-index:2000; }
+  .overlay.show { display:flex; animation:fade .2s; }
+  .panel {
+    position:relative; width:100%; max-width:380px; padding:34px 18px 18px; border-radius:22px; color:#fff;
+    background:linear-gradient(#2c6b45, #174a2d);
+    box-shadow:inset 0 0 0 3px var(--gold), inset 0 0 0 7px var(--wood), inset 0 0 0 9px rgba(255,207,74,.5),
+               0 14px 40px rgba(0,0,0,.6);
+    animation:pop .28s cubic-bezier(.3,1.6,.5,1);
+  }
+  .panel .ribbon {
+    position:absolute; left:50%; top:-18px; transform:translateX(-50%); white-space:nowrap;
+    padding:8px 26px; border-radius:12px; font-family:var(--display); font-size:22px; color:var(--ink);
+    background:linear-gradient(#ffe07a,#f0a91e); box-shadow:0 4px 0 #9a5f05, 0 6px 12px rgba(0,0,0,.4);
+    text-shadow:0 1px 0 rgba(255,255,255,.5);
+  }
+  .panel .stack { display:grid; gap:12px; }
+  .panel .stack .btn { width:100%; padding:13px; font-size:18px; }
+  .panel p { text-align:center; margin:6px 0; }
+  .seg { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .seg .btn:not(.on) { --top:#2b5a3d; --bot:#1c3f2a; --edge:#0c2416; opacity:.85; }
+  .seg .btn.on { --top:#ffe07a; --bot:#f0a91e; --edge:#9a5f05; color:var(--ink); text-shadow:none; }
+  .panel .small { font-size:12px; text-align:center; opacity:.6; }
+  @keyframes pop { from { transform:scale(.7); opacity:0; } }
+  @keyframes fade { from { opacity:0; } }
+
+  #stats table { width:100%; border-collapse:collapse; margin:4px 0 14px; font-variant-numeric:tabular-nums; font-size:15px; }
+  #stats th { font-family:var(--display); color:var(--gold); font-weight:normal; }
+  #stats th, #stats td { padding:7px 4px; text-align:right; border-bottom:1px solid rgba(255,255,255,.12); }
   #stats th:first-child, #stats td:first-child { text-align:left; }
-  #stats button { width:100%; background:var(--felt); padding:14px; font-size:17px; margin-top:8px; }
-  #stats button.plain { background:#fff; color:#c00; }
-  .best { color:#166e3c; font-weight:700; }
-  #install { position:fixed; inset:0; display:none; align-items:flex-end; justify-content:center; background:rgba(0,0,0,.45); z-index:2000; }
-  #install.show { display:flex; }
-  #install .sheet { background:#f2f2f7; color:#111; width:100%; max-width:480px; border-radius:16px 16px 0 0;
-                    padding:16px 18px calc(16px + env(safe-area-inset-bottom)); font-size:16px; line-height:1.45; }
-  #install h3 { margin:0 0 6px; }
-  #install ol { padding-left:20px; margin:0 0 14px; }
+
+  #install ol { padding-left:22px; margin:0 0 14px; line-height:1.45; }
   #install li { margin:8px 0; }
   #install svg { vertical-align:-5px; }
-  #install button { width:100%; background:var(--felt); padding:14px; font-size:17px; }
+
+  #win .panel { text-align:center; padding-top:40px; }
+  #win .big { font-family:var(--display); font-size:44px; color:var(--gold); line-height:1;
+              text-shadow:0 3px 0 #9a5f05, 0 6px 16px rgba(0,0,0,.5); margin:0 0 6px; animation:bounce 1s ease-in-out infinite; }
+  #win .stars { font-size:30px; letter-spacing:6px; margin-bottom:4px; color:var(--gold); text-shadow:0 2px 0 #9a5f05; }
+  #winText { font-family:var(--display); font-size:19px; }
+  .best { color:var(--gold); font-family:var(--display); font-size:18px; }
+  @keyframes bounce { 50% { transform:translateY(-6px); } }
+  #confetti { position:fixed; inset:0; pointer-events:none; z-index:2500; }
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="i-menu" viewBox="0 0 24 24"><path fill="currentColor" d="M3 5.5h18v3H3zM3 10.5h18v3H3zM3 15.5h18v3H3z" rx="1.5"/></symbol>
+  <symbol id="i-reload" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" d="M19 12a7 7 0 1 1-2.1-5"/><path fill="currentColor" d="M21 3v7h-7z"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" d="M9 14 4 9l5-5"/><path fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" d="M4 9h10a6 6 0 0 1 0 12h-3"/></symbol>
+  <symbol id="i-cards" viewBox="0 0 24 24"><rect x="3" y="5" width="11" height="15" rx="2" fill="currentColor" opacity=".55" transform="rotate(-12 8 12)"/><rect x="9" y="3" width="11" height="15" rx="2" fill="currentColor"/></symbol>
+  <symbol id="i-bulb" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2zM9 19h6v1.5a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 20.5z"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path fill="currentColor" d="M13 2 4 14h6l-1 8 9-12h-6z"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+  <symbol id="i-moves" viewBox="0 0 24 24"><path fill="currentColor" d="M5 3h9a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm13 3 3 1-4 13-2-.6z"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="3"/><path stroke="currentColor" stroke-width="3" stroke-linecap="round" d="M12 7v5l3 2"/></symbol>
+</svg>
 <div id="app">
   <header>
-    <span><button id="menuBtn">☰</button> <button id="reloadBtn" aria-label="Reload">↻</button></span>
-    <span class="stats"><span id="moves">0</span> moves · <span id="time">0:00</span></span>
-    <button id="undoBtn">Undo</button>
+    <div class="left">
+      <button id="menuBtn" class="btn round" aria-label="Menu"><svg><use href="#i-menu"/></svg></button>
+      <button id="reloadBtn" class="btn round" aria-label="Reload"><svg><use href="#i-reload"/></svg></button>
+    </div>
+    <div class="plaque">
+      <span><svg><use href="#i-moves"/></svg><span id="moves">0</span></span>
+      <span><svg><use href="#i-clock"/></svg><span id="time">0:00</span></span>
+    </div>
+    <button id="undoBtn" class="btn round" aria-label="Undo"><svg><use href="#i-undo"/></svg></button>
   </header>
   <div id="table"></div>
   <footer>
-    <button id="newBtn">New game</button>
-    <button id="hintBtn">Hint</button>
-    <button id="autoBtn" hidden>Finish</button>
-    <button id="installBtn" hidden>Install</button>
+    <button id="newBtn" class="btn green"><svg><use href="#i-cards"/></svg>New</button>
+    <button id="hintBtn" class="btn"><svg><use href="#i-bulb"/></svg>Hint</button>
+    <button id="autoBtn" class="btn gold" hidden><svg><use href="#i-bolt"/></svg>Finish!</button>
+    <button id="installBtn" class="btn" hidden><svg><use href="#i-down"/></svg>Install</button>
   </footer>
   <div id="verTag"></div>
   <div id="toast"></div>
 </div>
-<div id="win"><div><h2>You won! 🎉</h2><p id="winText"></p><p id="winBest" class="best"></p><button id="winNew">Play again</button></div></div>
-<div id="menu"><div class="sheet">
-  <button id="draw1">Draw 1</button>
-  <button id="draw3">Draw 3</button>
-  <button id="soundBtn">Sound: on</button>
-  <button id="statsBtn">Statistics</button>
-  <button id="restart">Restart this deal</button>
-  <button id="menuClose">Close</button>
-  <div id="ver" style="text-align:center;font-size:12px;color:#888"></div>
+<canvas id="confetti"></canvas>
+<div id="win" class="overlay"><div class="panel">
+  <div class="ribbon">Victory!</div>
+  <div class="stars">★★★</div>
+  <div class="big">You Win!</div>
+  <p id="winText"></p><p id="winBest" class="best"></p>
+  <div class="stack" style="margin-top:12px"><button id="winNew" class="btn gold">Play Again</button></div>
 </div></div>
-<div id="stats"><div class="sheet">
-  <h3>Statistics</h3>
+<div id="menu" class="overlay"><div class="panel">
+  <div class="ribbon">Menu</div>
+  <div class="stack">
+    <div class="seg"><button id="draw1" class="btn">Draw 1</button><button id="draw3" class="btn">Draw 3</button></div>
+    <button id="soundBtn" class="btn">Sound: on</button>
+    <button id="statsBtn" class="btn">Statistics</button>
+    <button id="restart" class="btn">Restart Deal</button>
+    <button id="menuClose" class="btn gold">Resume</button>
+    <div id="ver" class="small"></div>
+  </div>
+</div></div>
+<div id="stats" class="overlay"><div class="panel">
+  <div class="ribbon">Statistics</div>
   <table><thead><tr><th></th><th>Draw 1</th><th>Draw 3</th></tr></thead><tbody id="statsBody"></tbody></table>
-  <button id="statsReset" class="plain">Reset statistics</button>
-  <button id="statsClose">Close</button>
+  <div class="stack">
+    <button id="statsClose" class="btn gold">Close</button>
+    <button id="statsReset" class="btn red">Reset Statistics</button>
+  </div>
 </div></div>
-<div id="install"><div class="sheet">
-  <h3>Install Solitaire</h3>
+<div id="install" class="overlay"><div class="panel">
+  <div class="ribbon">Install</div>
   <ol>
     <li>Tap <b>⋯</b> at the bottom right of Safari.</li>
     <li>Tap <b>Share</b>
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#007aff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M7 10H5v11h14V10h-2"/></svg>.</li>
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#ffcf4a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M7 10H5v11h14V10h-2"/></svg>.</li>
     <li>Tap <b>View More</b>, then <b>Add to Home Screen</b>
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#111" stroke-width="2" stroke-linecap="round"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 8v8M8 12h8"/></svg>.</li>
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#ffcf4a" stroke-width="2" stroke-linecap="round"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 8v8M8 12h8"/></svg>.</li>
     <li>Leave <b>Open as Web App</b> on and tap <b>Add</b>. Solitaire opens full screen from your home screen and works offline.</li>
   </ol>
-  <button id="installClose">Got it</button>
+  <div class="stack"><button id="installClose" class="btn gold">Got it!</button></div>
 </div></div>
 
 <script>
@@ -222,7 +310,7 @@ function after() {
     S.won = true;
     $('winText').textContent = `${S.moves} moves in ${fmt(S.time)}`;
     $('winBest').textContent = recordWin();
-    setTimeout(() => $('win').classList.add('show'), 400);
+    setTimeout(() => { $('win').classList.add('show'); confetti(); }, 400);
     setTimeout(() => sfx('win'), 250);
   }
   save(); layout();
@@ -571,6 +659,28 @@ $('statsReset').onclick = () => {
   stats = { 1: blankStats(), 3: blankStats() }; saveStats(); showStats();
 };
 
+// ---------- confetti on a win ----------
+function confetti() {
+  const cv = $('confetti'), ctx = cv.getContext('2d'), dpr = devicePixelRatio || 1;
+  cv.width = innerWidth * dpr; cv.height = innerHeight * dpr; ctx.scale(dpr, dpr);
+  const colors = ['#ffcf4a', '#ff5d5d', '#4ad1ff', '#7dff7a', '#ffffff', '#ff9a3c'];
+  const bits = Array.from({ length: 140 }, () => ({
+    x: Math.random() * innerWidth, y: -20 - Math.random() * innerHeight * .6,
+    vx: (Math.random() - .5) * 2, vy: 2 + Math.random() * 3, r: Math.random() * 6.28, vr: (Math.random() - .5) * .3,
+    w: 6 + Math.random() * 6, h: 4 + Math.random() * 4, c: colors[Math.floor(Math.random() * colors.length)],
+  }));
+  const end = performance.now() + 4500;
+  (function frame(now) {
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+    for (const b of bits) {
+      b.x += b.vx; b.y += b.vy; b.r += b.vr; b.vx += (Math.random() - .5) * .1;
+      ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.r); ctx.fillStyle = b.c;
+      ctx.fillRect(-b.w / 2, -b.h / 2, b.w, b.h * Math.abs(Math.cos(b.r * 2))); ctx.restore();
+    }
+    if (now < end) requestAnimationFrame(frame); else ctx.clearRect(0, 0, innerWidth, innerHeight);
+  })(performance.now());
+}
+
 // ---------- timer ----------
 const fmt = s => Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
 setInterval(() => {
@@ -614,7 +724,7 @@ document.addEventListener('touchend', e => {
 document.addEventListener('dblclick', e => e.preventDefault());
 
 if (!load()) deal(Date.now()); else { layout(); $('time').textContent = fmt(S.time); }
-const APP_VERSION = 'v19';
+const APP_VERSION = 'v20';
 $('ver').textContent = 'Version ' + APP_VERSION;
 function toast(msg, ms = 3000) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
