@@ -589,7 +589,7 @@ function slide(f1, f2, { peak = 0.05, attack = 0.07, hold = 0.04, release = 0.14
       b0 = .99765 * b0 + w * .099046; b1 = .963 * b1 + w * .2965164; b2 = .57 * b2 + w * 1.0526913;
       d[i] = (b0 + b1 + b2 + w * .1848) * .2; }
   }
-  const t = actx.currentTime + delay, end = t + attack + hold + release;
+  const t = actx.currentTime + 0.01 + delay, end = t + attack + hold + release;
   const src = actx.createBufferSource(), hp = actx.createBiquadFilter(), bp = actx.createBiquadFilter(),
         lp = actx.createBiquadFilter(), g = actx.createGain();
   src.buffer = pinkBuf; src.loop = true;
@@ -602,9 +602,9 @@ function slide(f1, f2, { peak = 0.05, attack = 0.07, hold = 0.04, release = 0.14
   bp.frequency.setValueAtTime(f1 * v, t);
   bp.frequency.exponentialRampToValueAtTime(f2 * v, end);   // exponential: flat at first, lifts toward the end
   // ease-in: S-curve from silence ((1 - cos) / 2), so the start is very gentle
-  const curve = new Float32Array(48);
-  for (let i = 0; i < curve.length; i++) curve[i] = peak * (1 - Math.cos(Math.PI * i / (curve.length - 1))) / 2;
-  g.gain.setValueCurveAtTime(curve, t, attack);
+  // built from short straight segments (setValueCurveAtTime is fragile in Safari)
+  g.gain.setValueAtTime(0, t);
+  for (let i = 1; i <= 8; i++) g.gain.linearRampToValueAtTime(peak * (1 - Math.cos(Math.PI * i / 8)) / 2, t + attack * i / 8);
   g.gain.setValueAtTime(peak, t + attack + hold);
   g.gain.linearRampToValueAtTime(0, end);                    // glide out
   src.connect(hp).connect(bp).connect(lp).connect(lp2).connect(lp3).connect(g).connect(master);
@@ -612,7 +612,7 @@ function slide(f1, f2, { peak = 0.05, attack = 0.07, hold = 0.04, release = 0.14
 }
 // Win: soft muted plucks (the "Pluck" test's win).
 function pluck(freq, delay) {
-  const t = actx.currentTime + delay;
+  const t = actx.currentTime + 0.01 + delay;
   const o = actx.createOscillator(), g = actx.createGain(), f = actx.createBiquadFilter();
   o.type = 'triangle'; o.frequency.value = freq; f.type = 'lowpass'; f.frequency.value = 1100;
   g.gain.setValueAtTime(0.0001, t);
@@ -621,7 +621,11 @@ function pluck(freq, delay) {
   o.connect(g).connect(f).connect(master);
   o.start(t); o.stop(t + 0.5);
 }
+// Sound must never break gameplay: any audio error is swallowed.
 function sfx(name) {
+  try { playSfx(name); } catch (e) { console.warn('sound failed:', name, e); }
+}
+function playSfx(name) {
   if (!soundOn || !actx || actx.state !== 'running') return;
   switch (name) {
     case 'place':      slide(950, 1200); break;
@@ -760,7 +764,7 @@ document.addEventListener('touchend', e => {
 document.addEventListener('dblclick', e => e.preventDefault());
 
 if (!load()) deal(Date.now()); else { layout(); $('time').textContent = fmt(S.time); }
-const APP_VERSION = 'v40';
+const APP_VERSION = 'v41';
 $('ver').textContent = 'Version ' + APP_VERSION;
 function toast(msg, ms = 3000) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
