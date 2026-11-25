@@ -588,6 +588,11 @@ document.addEventListener('visibilitychange', () => {
 });
 document.addEventListener('pointerdown', unlockAudio, true);
 
+// Schedule sounds a little ahead (60 ms + the device's reported output latency). If the phone handles
+// the request late, the start is still in the future, so the soft fade-in is never skipped.
+const SOUND_LEAD = 0.06;
+const soundStart = () => actx.currentTime + SOUND_LEAD + (actx.baseLatency || 0);
+
 // Swoosh: pink noise through a band-pass whose pitch sweeps steeply up (accelerating, exponential)
 // while the volume fades from start to finish. Short eased fade-in so the start never hits.
 let swooshNoise = null;
@@ -600,8 +605,9 @@ function swoosh({ f1 = 700, f2 = 4500, dur = 0.22, peak = 0.06, rise = 0.015, q 
       b0 = .99765 * b0 + w * .099046; b1 = .963 * b1 + w * .2965164; b2 = .57 * b2 + w * 1.0526913;
       d[i] = (b0 + b1 + b2 + w * .1848) * .2; }
   }
-  const t = actx.currentTime + 0.01 + delay, end = t + dur;
+  const t = soundStart() + delay, end = t + dur;
   const src = actx.createBufferSource(), bp = actx.createBiquadFilter(), g = actx.createGain();
+  g.gain.value = 0;                         // silent from the moment it exists
   src.buffer = swooshNoise; src.loop = true;
   bp.type = 'bandpass'; bp.Q.value = q;
   const v = 0.95 + Math.random() * 0.1;
@@ -622,9 +628,10 @@ function swoosh({ f1 = 700, f2 = 4500, dur = 0.22, peak = 0.06, rise = 0.015, q 
 }
 // Win: soft muted plucks (the "Pluck" test's win).
 function pluck(freq, delay) {
-  const t = actx.currentTime + 0.01 + delay;
+  const t = soundStart() + delay;
   const o = actx.createOscillator(), g = actx.createGain(), f = actx.createBiquadFilter();
   o.type = 'triangle'; o.frequency.value = freq; f.type = 'lowpass'; f.frequency.value = 1100;
+  g.gain.value = 0.0001;
   g.gain.setValueAtTime(0.0001, t);
   g.gain.exponentialRampToValueAtTime(0.09, t + 0.004);
   g.gain.exponentialRampToValueAtTime(0.0001, t + 0.454);
@@ -774,7 +781,7 @@ document.addEventListener('touchend', e => {
 document.addEventListener('dblclick', e => e.preventDefault());
 
 if (!load()) deal(Date.now()); else { layout(); $('time').textContent = fmt(S.time); }
-const APP_VERSION = 'v51';
+const APP_VERSION = 'v52';
 $('ver').textContent = 'Version ' + APP_VERSION;
 function toast(msg, ms = 3000) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
