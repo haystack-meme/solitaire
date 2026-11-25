@@ -1,7 +1,6 @@
 // Bump VERSION on every change so installed apps pick up the new files.
-const VERSION = 'solitaire-v21';
-const FILES = ['./', 'index.html', 'manifest.webmanifest', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'fonts/lilita-one.woff2',
-  ...['cardPlace1','cardSlide1','cardSlide2','cardSlide3','cardSlide4','cardShove1','cardFan1','cardShuffle'].map(n => `sounds/${n}.m4a`)];
+const VERSION = 'solitaire-v22';
+const FILES = ['./', 'index.html', 'manifest.webmanifest', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'fonts/lilita-one.woff2'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));

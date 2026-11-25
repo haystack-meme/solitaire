@@ -507,105 +507,48 @@ $('draw1').onclick = () => setDraw(1);
 $('draw3').onclick = () => setDraw(3);
 $('restart').onclick = () => { $('menu').classList.remove('show'); deal(dealSeed); };
 
-// ---------- sound effects (synthesized with Web Audio, no files) ----------
-let soundOn = true, actx = null;
+// ---------- sound effects: soft synthesized clicks (Web Audio, no files) ----------
+let soundOn = true, actx = null, master = null;
 try { soundOn = localStorage.getItem('sol-sound') !== 'off'; } catch {}
 // 'ambient' = follows the iPhone's silent switch and mixes with other audio
 try { if (navigator.audioSession) navigator.audioSession.type = 'ambient'; } catch {}
 function unlockAudio() {
   if (!soundOn) return;
-  if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return; actx = new AC(); }
-  if (actx.state !== 'running') actx.resume();
-  loadSamples();
-}
-document.addEventListener('pointerdown', unlockAudio, true);
-// All sounds go through one quiet master volume with the harsh top end rolled off.
-let master = null;
-function out() {
-  if (!master) {
-    master = actx.createGain(); master.gain.value = 0.35;
-    const soften = actx.createBiquadFilter(); soften.type = 'lowpass'; soften.frequency.value = 5000;
+  if (!actx) {
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+    actx = new AC();
+    master = actx.createGain(); master.gain.value = 0.5;
+    const soften = actx.createBiquadFilter(); soften.type = 'lowpass'; soften.frequency.value = 2500;
     master.connect(soften).connect(actx.destination);
   }
-  return master;
+  if (actx.state !== 'running') actx.resume();
 }
-let noiseBuf = null;
-function noise(t0, dur, freq, q, gain) {
-  if (!noiseBuf) {
-    noiseBuf = actx.createBuffer(1, actx.sampleRate * 0.5, actx.sampleRate);
-    const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-  }
-  const src = actx.createBufferSource(), f = actx.createBiquadFilter(), g = actx.createGain();
-  src.buffer = noiseBuf; f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q;
-  g.gain.setValueAtTime(gain, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
-  src.connect(f).connect(g).connect(out()); src.start(t0); src.stop(t0 + dur + 0.02);
-}
-function tone(t0, freq, dur, gain, type = 'sine') {
-  const o = actx.createOscillator(), g = actx.createGain();
-  o.type = type; o.frequency.value = freq;
-  g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(gain, t0 + 0.01);
-  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  o.connect(g).connect(out()); o.start(t0); o.stop(t0 + dur + 0.02);
-}
-// Recorded card sounds: Kenney "Casino Audio" (CC0, kenney.nl), converted to AAC for iOS.
-const SAMPLES = {
-  place: ['cardPlace1'],
-  draw: ['cardSlide1', 'cardSlide2', 'cardSlide3', 'cardSlide4'],
-  undo: ['cardShove1'],
-  recycle: ['cardFan1'],
-  shuffle: ['cardShuffle'],
-};
-const buffers = {};
-let samplesLoading = false;
-function loadSamples() {
-  if (samplesLoading || !actx) return;
-  samplesLoading = true;
-  const names = [...new Set(Object.values(SAMPLES).flat())];
-  names.forEach(n => fetch('sounds/' + n + '.m4a')
-    .then(r => r.arrayBuffer())
-    .then(b => new Promise((ok, bad) => actx.decodeAudioData(b, ok, bad)))
-    .then(buf => { buffers[n] = buf; })
-    .catch(() => {}));
-}
-function sample(kind, { gain = 1, maxDur = 0, delay = 0 } = {}) {
-  const list = SAMPLES[kind].filter(n => buffers[n]);
-  if (!list.length) return false;
+document.addEventListener('pointerdown', unlockAudio, true);
+
+// One soft tick: a sine blip with a near-instant (but click-free) attack and a quick decay.
+function tick(freq, { gain = 0.12, decay = 0.045, delay = 0 } = {}) {
   const t = actx.currentTime + delay;
-  const src = actx.createBufferSource(), g = actx.createGain();
-  src.buffer = buffers[list[Math.floor(Math.random() * list.length)]];
-  src.playbackRate.value = 0.94 + Math.random() * 0.12;      // slight variety between plays
-  g.gain.value = gain;
-  if (maxDur) { g.gain.setValueAtTime(gain, t + maxDur - 0.25); g.gain.linearRampToValueAtTime(0, t + maxDur); }
-  src.connect(g).connect(out());
-  src.start(t);
-  if (maxDur) src.stop(t + maxDur + 0.05);
-  return true;
+  const o = actx.createOscillator(), g = actx.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(freq * (0.98 + Math.random() * 0.04), t);
+  o.frequency.exponentialRampToValueAtTime(freq * 0.7, t + decay);      // tiny downward "tok"
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(gain, t + 0.004);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+  o.connect(g).connect(master);
+  o.start(t); o.stop(t + decay + 0.02);
 }
 function sfx(name) {
   if (!soundOn || !actx || actx.state !== 'running') return;
-  const t = actx.currentTime;
   switch (name) {
-    case 'place':      if (sample('place')) return; break;
-    case 'flip':       if (sample('draw', { gain: 0.6 })) return; break;
-    case 'draw':       if (sample('draw')) return; break;
-    case 'undo':       if (sample('undo', { gain: 0.6 })) return; break;
-    case 'recycle':    if (sample('recycle', { gain: 0.6 })) return; break;
-    case 'shuffle':    if (sample('shuffle', { maxDur: 0.8, gain: 0.5 })) return; break;
-    case 'foundation': if (sample('place')) return; break;
-  }
-  synthSfx(name, t);
-}
-function synthSfx(name, t) {
-  switch (name) {
-    case 'place':      noise(t, 0.06, 1800, 1.2, 0.5); break;                 // card snap
-    case 'flip':       noise(t, 0.04, 3200, 2, 0.35); break;                  // light flick
-    case 'draw':       noise(t, 0.09, 2400, 0.8, 0.3); break;                 // swish off the deck
-    case 'undo':       noise(t, 0.05, 1300, 1.2, 0.35); break;
-    case 'recycle':    for (let i = 0; i < 4; i++) noise(t + i * 0.035, 0.05, 2000, 1, 0.25); break;
-    case 'shuffle':    for (let i = 0; i < 10; i++) noise(t + i * 0.03, 0.04, 1600 + Math.random() * 1600, 1, 0.22); break;
-    case 'foundation': noise(t, 0.05, 1800, 1.2, 0.4); tone(t + 0.01, 880, 0.18, 0.12); break;
-    case 'nope':       tone(t, 140, 0.1, 0.12, 'triangle'); break;
-    case 'win':        [523, 659, 784, 1047].forEach((f, i) => tone(t + i * 0.14, f, 0.3, 0.08, 'sine')); break;
+    case 'place':      tick(900); break;
+    case 'draw':       tick(1150, { gain: 0.09 }); break;
+    case 'undo':       tick(700, { gain: 0.09 }); break;
+    case 'foundation': tick(1200); break;
+    case 'recycle':    tick(800, { gain: 0.08 }); tick(950, { gain: 0.08, delay: 0.06 }); break;
+    case 'shuffle':    for (let i = 0; i < 3; i++) tick(850 + i * 120, { gain: 0.07, delay: i * 0.07 }); break;
+    case 'nope':       tick(320, { gain: 0.1, decay: 0.06 }); break;
+    case 'win':        [660, 830, 990, 1320].forEach((f, i) => tick(f, { gain: 0.09, decay: 0.25, delay: i * 0.13 })); break;
   }
 }
 const showSound = () => { $('soundBtn').textContent = 'Sound: ' + (soundOn ? 'on' : 'off'); };
@@ -726,7 +669,7 @@ document.addEventListener('touchend', e => {
 document.addEventListener('dblclick', e => e.preventDefault());
 
 if (!load()) deal(Date.now()); else { layout(); $('time').textContent = fmt(S.time); }
-const APP_VERSION = 'v21';
+const APP_VERSION = 'v22';
 $('ver').textContent = 'Version ' + APP_VERSION;
 function toast(msg, ms = 3000) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
