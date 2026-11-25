@@ -90,6 +90,11 @@ const STYLES = [
     place: () => tone(rnd(330, .02), { type: 'triangle', peak: .1, a: .004, d: .16, lp: 900 }),
     draw: () => tone(rnd(440, .02), { type: 'triangle', peak: .07, a: .004, d: .12, lp: 1000 }),
     win: () => [330, 415, 494, 659].forEach((f, i) => tone(f, { type: 'triangle', peak: .09, a: .004, d: .45, lp: 1100, delay: i * .13 })) },
+  ...[['G', 'Soft air — higher', 1400, 1800], ['H', 'Soft air — lower (now in the game)', 1000, 1300], ['I', 'Soft air — lowest', 700, 900]]
+    .map(([id, name, fp, fd]) => ({ id, name, desc: 'Paper + Whisper blend, Pluck win.',
+      place: () => air({ type: 'bandpass', f: rnd(fp, .1), q: .5, peak: .06, a: .02, d: .08 }),
+      draw: () => air({ type: 'bandpass', f: rnd(fd, .1), q: .5, peak: .045, a: .03, d: .11 }),
+      win: () => [330, 415, 494, 659].forEach((f, i) => tone(f, { type: 'triangle', peak: .09, a: .004, d: .45, lp: 1100, delay: i * .13 })) })),
 ];
 
 const list = document.getElementById('list');

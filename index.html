@@ -517,24 +517,15 @@ function unlockAudio() {
   if (!actx) {
     const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
     actx = new AC();
-    master = actx.createGain(); master.gain.value = 0.6;
-    const soften = actx.createBiquadFilter(); soften.type = 'lowpass'; soften.frequency.value = 1000; soften.Q.value = 0.5;
-    master.connect(soften).connect(actx.destination);
-    // small soft "room": a short, dark, decaying noise impulse blurs the edges of every sound
-    const len = Math.floor(actx.sampleRate * 0.45), ir = actx.createBuffer(2, len, actx.sampleRate);
-    for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); let lp = 0;
-      for (let i = 0; i < len; i++) { lp += (Math.random() * 2 - 1 - lp) * 0.15; d[i] = lp * Math.pow(1 - i / len, 3); } }
-    const verb = actx.createConvolver(); verb.buffer = ir;
-    const wet = actx.createGain(); wet.gain.value = 0.9;
-    soften.connect(verb).connect(wet).connect(actx.destination);
+    master = actx.createGain(); master.gain.value = 0.6; master.connect(actx.destination);
   }
   if (actx.state !== 'running') actx.resume();
 }
 document.addEventListener('pointerdown', unlockAudio, true);
 
-// Felt "brush": muffled noise, eased in and out, a little different every time.
+// Soft air: band-passed noise, eased in and out, no tone (a blend of the "Paper" and "Whisper" tests).
 let noiseBuf = null;
-function brush({ freq = 450, gain = 0.25, attack = 0.025, decay = 0.13, delay = 0 } = {}) {
+function air(freq, { peak = 0.06, attack = 0.02, decay = 0.08, delay = 0 } = {}) {
   if (!noiseBuf) {
     noiseBuf = actx.createBuffer(1, actx.sampleRate, actx.sampleRate);
     const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
@@ -542,41 +533,35 @@ function brush({ freq = 450, gain = 0.25, attack = 0.025, decay = 0.13, delay = 
   const t = actx.currentTime + delay;
   const src = actx.createBufferSource(), f = actx.createBiquadFilter(), g = actx.createGain();
   src.buffer = noiseBuf; src.loop = true;
-  f.type = 'lowpass'; f.Q.value = 0.3;
-  f.frequency.setValueAtTime(freq * (0.85 + Math.random() * 0.3), t);
-  f.frequency.exponentialRampToValueAtTime(freq * 0.5, t + attack + decay);   // darkens as it fades
+  f.type = 'bandpass'; f.Q.value = 0.5; f.frequency.value = freq * (0.9 + Math.random() * 0.2);
   g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(gain * (0.85 + Math.random() * 0.3), t + attack);
+  g.gain.exponentialRampToValueAtTime(peak, t + attack);
   g.gain.exponentialRampToValueAtTime(0.0001, t + attack + decay);
   src.connect(f).connect(g).connect(master);
   src.start(t, Math.random() * 0.5); src.stop(t + attack + decay + 0.05);
 }
-// Warm pad for a win: each note is two slightly detuned triangles, swelling in and out slowly.
-function swell(freqs, { gain = 0.035, attack = 0.5, hold = 0.3, release = 1.8 } = {}) {
-  const t = actx.currentTime;
-  freqs.forEach((fr, i) => [-4, 4].forEach(cents => {
-    const o = actx.createOscillator(), g = actx.createGain();
-    o.type = 'triangle'; o.frequency.value = fr; o.detune.value = cents;
-    const st = t + i * 0.08;
-    g.gain.setValueAtTime(0.0001, st);
-    g.gain.exponentialRampToValueAtTime(gain, st + attack);
-    g.gain.setValueAtTime(gain, st + attack + hold);
-    g.gain.exponentialRampToValueAtTime(0.0001, st + attack + hold + release);
-    o.connect(g).connect(master);
-    o.start(st); o.stop(st + attack + hold + release + 0.05);
-  }));
+// Win: soft muted plucks (the "Pluck" test's win).
+function pluck(freq, delay) {
+  const t = actx.currentTime + delay;
+  const o = actx.createOscillator(), g = actx.createGain(), f = actx.createBiquadFilter();
+  o.type = 'triangle'; o.frequency.value = freq; f.type = 'lowpass'; f.frequency.value = 1100;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.09, t + 0.004);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.454);
+  o.connect(g).connect(f).connect(master);
+  o.start(t); o.stop(t + 0.5);
 }
 function sfx(name) {
   if (!soundOn || !actx || actx.state !== 'running') return;
   switch (name) {
-    case 'place':      brush(); break;
-    case 'foundation': brush({ freq: 550 }); break;
-    case 'draw':       brush({ freq: 650, gain: 0.2, decay: 0.16 }); break;
-    case 'undo':       brush({ freq: 380, gain: 0.2 }); break;
-    case 'recycle':    brush({ freq: 500, gain: 0.2, attack: 0.08, decay: 0.35 }); break;
-    case 'shuffle':    for (let i = 0; i < 3; i++) brush({ freq: 500, gain: 0.16, delay: i * 0.09 }); break;
-    case 'nope':       brush({ freq: 220, gain: 0.3, decay: 0.12 }); break;
-    case 'win':        swell([196, 247, 294, 392]); break;
+    case 'place':      air(1000); break;
+    case 'foundation': air(1100); break;
+    case 'draw':       air(1300, { peak: 0.045, attack: 0.03, decay: 0.11 }); break;
+    case 'undo':       air(900, { peak: 0.045, decay: 0.07 }); break;
+    case 'recycle':    air(1000, { peak: 0.045, attack: 0.06, decay: 0.25 }); break;
+    case 'shuffle':    for (let i = 0; i < 3; i++) air(1100, { peak: 0.04, delay: i * 0.08 }); break;
+    case 'nope':       air(600, { peak: 0.05, decay: 0.06 }); break;
+    case 'win':        [330, 415, 494, 659].forEach((f, i) => pluck(f, i * 0.13)); break;
   }
 }
 const showSound = () => { $('soundBtn').textContent = 'Sound: ' + (soundOn ? 'on' : 'off'); };
@@ -697,7 +682,7 @@ document.addEventListener('touchend', e => {
 document.addEventListener('dblclick', e => e.preventDefault());
 
 if (!load()) deal(Date.now()); else { layout(); $('time').textContent = fmt(S.time); }
-const APP_VERSION = 'v24';
+const APP_VERSION = 'v25';
 $('ver').textContent = 'Version ' + APP_VERSION;
 function toast(msg, ms = 3000) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
