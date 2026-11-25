@@ -421,6 +421,7 @@ function unlockAudio() {
   if (!soundOn) return;
   if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return; actx = new AC(); }
   if (actx.state !== 'running') actx.resume();
+  loadSamples();
 }
 document.addEventListener('pointerdown', unlockAudio, true);
 let noiseBuf = null;
@@ -441,9 +442,56 @@ function tone(t0, freq, dur, gain, type = 'sine') {
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
   o.connect(g).connect(actx.destination); o.start(t0); o.stop(t0 + dur + 0.02);
 }
+// Recorded card sounds: Kenney "Casino Audio" (CC0, kenney.nl), converted to AAC for iOS.
+const SAMPLES = {
+  place: ['cardPlace1', 'cardPlace2', 'cardPlace3', 'cardPlace4'],
+  draw: ['cardSlide1', 'cardSlide2', 'cardSlide3', 'cardSlide4'],
+  undo: ['cardShove1'],
+  recycle: ['cardFan1'],
+  shuffle: ['cardShuffle'],
+};
+const buffers = {};
+let samplesLoading = false;
+function loadSamples() {
+  if (samplesLoading || !actx) return;
+  samplesLoading = true;
+  const names = [...new Set(Object.values(SAMPLES).flat())];
+  names.forEach(n => fetch('sounds/' + n + '.m4a')
+    .then(r => r.arrayBuffer())
+    .then(b => new Promise((ok, bad) => actx.decodeAudioData(b, ok, bad)))
+    .then(buf => { buffers[n] = buf; })
+    .catch(() => {}));
+}
+function sample(kind, { gain = 1, maxDur = 0, delay = 0 } = {}) {
+  const list = SAMPLES[kind].filter(n => buffers[n]);
+  if (!list.length) return false;
+  const t = actx.currentTime + delay;
+  const src = actx.createBufferSource(), g = actx.createGain();
+  src.buffer = buffers[list[Math.floor(Math.random() * list.length)]];
+  src.playbackRate.value = 0.94 + Math.random() * 0.12;      // slight variety between plays
+  g.gain.value = gain;
+  if (maxDur) { g.gain.setValueAtTime(gain, t + maxDur - 0.25); g.gain.linearRampToValueAtTime(0, t + maxDur); }
+  src.connect(g).connect(actx.destination);
+  src.start(t);
+  if (maxDur) src.stop(t + maxDur + 0.05);
+  return true;
+}
 function sfx(name) {
   if (!soundOn || !actx || actx.state !== 'running') return;
   const t = actx.currentTime;
+  switch (name) {
+    case 'place':      if (sample('place')) return; break;
+    case 'flip':       if (sample('draw', { gain: 0.6 })) return; break;
+    case 'draw':       if (sample('draw')) return; break;
+    case 'undo':       if (sample('undo', { gain: 0.8 })) return; break;
+    case 'recycle':    if (sample('recycle')) return; break;
+    case 'shuffle':    if (sample('shuffle', { maxDur: 1.4, gain: 0.9 })) return; break;
+    case 'foundation': if (sample('place')) { tone(t + 0.03, 1046, 0.25, 0.07); return; } break;
+    case 'win':        sample('recycle'); break;
+  }
+  synthSfx(name, t);
+}
+function synthSfx(name, t) {
   switch (name) {
     case 'place':      noise(t, 0.06, 1800, 1.2, 0.5); break;                 // card snap
     case 'flip':       noise(t, 0.04, 3200, 2, 0.35); break;                  // light flick
@@ -552,7 +600,7 @@ document.addEventListener('touchend', e => {
 document.addEventListener('dblclick', e => e.preventDefault());
 
 if (!load()) deal(Date.now()); else { layout(); $('time').textContent = fmt(S.time); }
-const APP_VERSION = 'v11';
+const APP_VERSION = 'v12';
 $('ver').textContent = 'Version ' + APP_VERSION;
 $('verTag').textContent = APP_VERSION;
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
