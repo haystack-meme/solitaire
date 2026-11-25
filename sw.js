@@ -1,5 +1,5 @@
 // Bump VERSION on every change so installed apps pick up the new files.
-const VERSION = 'solitaire-v16';
+const VERSION = 'solitaire-v17';
 const FILES = ['./', 'index.html', 'manifest.webmanifest', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png',
   ...['cardPlace1','cardSlide1','cardSlide2','cardSlide3','cardSlide4','cardShove1','cardFan1','cardShuffle'].map(n => `sounds/${n}.m4a`)];
 

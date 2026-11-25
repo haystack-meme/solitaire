@@ -609,7 +609,7 @@ document.addEventListener('touchend', e => {
 document.addEventListener('dblclick', e => e.preventDefault());
 
 if (!load()) deal(Date.now()); else { layout(); $('time').textContent = fmt(S.time); }
-const APP_VERSION = 'v16';
+const APP_VERSION = 'v17';
 $('ver').textContent = 'Version ' + APP_VERSION;
 $('verTag').textContent = APP_VERSION;
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
