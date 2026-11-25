@@ -578,7 +578,8 @@ const SLIDE_RISE = 2.5;                     // >1 strengthens the upward pitch c
 function slide(f1, f2, { peak = 0.05, attack = 0.07, hold = 0.04, release = 0.14, delay = 0 } = {}) {
   peak *= SLIDE_VOL; attack *= SLIDE_TIME; hold *= SLIDE_TIME; release *= SLIDE_TIME;
   // longer, eased fade-in; take the extra time out of the hold so the length stays the same
-  const extra = attack * 0.6; attack += extra; hold = Math.max(0.002, hold - extra);
+  // swell-dominant shape (long eased rise, short fall) so it never reads as an impact
+  const extra = attack * 1.5; attack += extra; hold = Math.max(0.002, hold - extra); release *= 0.8;
   if (f2 > f1) f2 = f1 * Math.pow(f2 / f1, SLIDE_RISE);
   if (!pinkBuf) {
     pinkBuf = actx.createBuffer(1, actx.sampleRate, actx.sampleRate);
@@ -591,7 +592,7 @@ function slide(f1, f2, { peak = 0.05, attack = 0.07, hold = 0.04, release = 0.14
   const src = actx.createBufferSource(), hp = actx.createBiquadFilter(), bp = actx.createBiquadFilter(),
         lp = actx.createBiquadFilter(), g = actx.createGain();
   src.buffer = pinkBuf; src.loop = true;
-  hp.type = 'highpass'; hp.frequency.value = 900;   // less body = wispier
+  hp.type = 'highpass'; hp.frequency.value = 1200;  // no low body: nothing to 'thud'
   lp.type = 'lowpass'; lp.frequency.value = 2300; lp.Q.value = 0.5;
   const lp2 = actx.createBiquadFilter(); lp2.type = 'lowpass'; lp2.frequency.value = 2500; lp2.Q.value = 0.5;   // steeper roll-off = less grain
   bp.type = 'bandpass'; bp.Q.value = 0.8;   // wide = breathy, airy
@@ -757,7 +758,7 @@ document.addEventListener('touchend', e => {
 document.addEventListener('dblclick', e => e.preventDefault());
 
 if (!load()) deal(Date.now()); else { layout(); $('time').textContent = fmt(S.time); }
-const APP_VERSION = 'v38';
+const APP_VERSION = 'v39';
 $('ver').textContent = 'Version ' + APP_VERSION;
 function toast(msg, ms = 3000) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
