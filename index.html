@@ -454,7 +454,7 @@ function tone(t0, freq, dur, gain, type = 'sine') {
 }
 // Recorded card sounds: Kenney "Casino Audio" (CC0, kenney.nl), converted to AAC for iOS.
 const SAMPLES = {
-  place: ['cardPlace1', 'cardPlace2', 'cardPlace3', 'cardPlace4'],
+  place: ['cardPlace1', 'cardPlace3'],
   draw: ['cardSlide1', 'cardSlide2', 'cardSlide3', 'cardSlide4'],
   undo: ['cardShove1'],
   recycle: ['cardFan1'],
@@ -609,7 +609,7 @@ document.addEventListener('touchend', e => {
 document.addEventListener('dblclick', e => e.preventDefault());
 
 if (!load()) deal(Date.now()); else { layout(); $('time').textContent = fmt(S.time); }
-const APP_VERSION = 'v14';
+const APP_VERSION = 'v15';
 $('ver').textContent = 'Version ' + APP_VERSION;
 $('verTag').textContent = APP_VERSION;
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
