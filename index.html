@@ -568,9 +568,24 @@ function unlockAudio() {
     const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
     actx = new AC();
     master = actx.createGain(); master.gain.value = soundGain(); master.connect(actx.destination);
+    keepAwake();
   }
   if (actx.state !== 'running') actx.resume();
 }
+// Keep the audio output awake with an inaudible signal (about -85 dB). Otherwise iOS powers the
+// speaker down between sounds, and waking it makes a thump just before each sound.
+function keepAwake() {
+  const len = actx.sampleRate * 2, buf = actx.createBuffer(1, len, actx.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  const src = actx.createBufferSource(), g = actx.createGain();
+  src.buffer = buf; src.loop = true; g.gain.value = 0.00006;
+  src.connect(g).connect(actx.destination); src.start();
+}
+// Pause audio in the background (saves battery); it resumes on the next touch.
+document.addEventListener('visibilitychange', () => {
+  if (!actx) return;
+  try { if (document.hidden) actx.suspend(); else if (soundOn) actx.resume(); } catch {}
+});
 document.addEventListener('pointerdown', unlockAudio, true);
 
 // Gentle slide: warm (pink) noise kept between ~500 Hz and ~2.5 kHz, where phone speakers are smooth.
@@ -612,7 +627,8 @@ function slide(f1, f2, { peak = 0.05, attack = 0.07, hold = 0.04, release = 0.14
   // ease-in: S-curve from silence ((1 - cos) / 2), so the start is very gentle
   // built from short straight segments (setValueCurveAtTime is fragile in Safari)
   g.gain.setValueAtTime(0, t);
-  for (let i = 1; i <= 8; i++) g.gain.linearRampToValueAtTime(peak * (1 - Math.cos(Math.PI * i / 8)) / 2, t + attack * i / 8);
+  // squared S-curve: starts as a near-silent whisper and grows with the swoop
+  for (let i = 1; i <= 12; i++) g.gain.linearRampToValueAtTime(peak * Math.pow((1 - Math.cos(Math.PI * i / 12)) / 2, 2), t + attack * i / 12);
   g.gain.setValueAtTime(peak, t + attack + hold);
   g.gain.linearRampToValueAtTime(0, end);                    // glide out
   src.connect(hp).connect(bp).connect(lp).connect(lp2).connect(lp3).connect(g).connect(master);
@@ -772,7 +788,7 @@ document.addEventListener('touchend', e => {
 document.addEventListener('dblclick', e => e.preventDefault());
 
 if (!load()) deal(Date.now()); else { layout(); $('time').textContent = fmt(S.time); }
-const APP_VERSION = 'v43';
+const APP_VERSION = 'v44';
 $('ver').textContent = 'Version ' + APP_VERSION;
 function toast(msg, ms = 3000) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
