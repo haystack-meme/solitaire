@@ -574,12 +574,13 @@ document.addEventListener('pointerdown', unlockAudio, true);
 // It swells in, holds briefly and glides out, with the pitch drifting up like a card moving across felt.
 let pinkBuf = null;
 const SLIDE_TIME = 0.4, SLIDE_VOL = 0.6;   // overall: quicker and quieter
-const SLIDE_RISE = 2.5;                     // >1 strengthens the upward pitch curve (1 = as written)
+const SLIDE_RISE = 1.6;                     // >1 strengthens the upward pitch curve (1 = as written)
 function slide(f1, f2, { peak = 0.05, attack = 0.07, hold = 0.04, release = 0.14, delay = 0 } = {}) {
   peak *= SLIDE_VOL; attack *= SLIDE_TIME; hold *= SLIDE_TIME; release *= SLIDE_TIME;
   // longer, eased fade-in; take the extra time out of the hold so the length stays the same
   // swell-dominant shape (long eased rise, short fall) so it never reads as an impact
   const extra = attack * 1.5; attack += extra; hold = Math.max(0.002, hold - extra); release *= 0.8;
+  f1 *= 0.85; f2 *= 0.85;                    // whole sound a bit lower = darker, less sharp
   if (f2 > f1) f2 = f1 * Math.pow(f2 / f1, SLIDE_RISE);
   if (!pinkBuf) {
     pinkBuf = actx.createBuffer(1, actx.sampleRate, actx.sampleRate);
@@ -592,9 +593,10 @@ function slide(f1, f2, { peak = 0.05, attack = 0.07, hold = 0.04, release = 0.14
   const src = actx.createBufferSource(), hp = actx.createBiquadFilter(), bp = actx.createBiquadFilter(),
         lp = actx.createBiquadFilter(), g = actx.createGain();
   src.buffer = pinkBuf; src.loop = true;
-  hp.type = 'highpass'; hp.frequency.value = 1200;  // no low body: nothing to 'thud'
-  lp.type = 'lowpass'; lp.frequency.value = 2300; lp.Q.value = 0.5;
-  const lp2 = actx.createBiquadFilter(); lp2.type = 'lowpass'; lp2.frequency.value = 2500; lp2.Q.value = 0.5;   // steeper roll-off = less grain
+  hp.type = 'highpass'; hp.frequency.value = 700;   // between thumpy (500) and thin/bright (1200)
+  lp.type = 'lowpass'; lp.frequency.value = 1600; lp.Q.value = 0.5;
+  const lp2 = actx.createBiquadFilter(); lp2.type = 'lowpass'; lp2.frequency.value = 1700; lp2.Q.value = 0.5;   // steeper roll-off = less grain
+  const lp3 = actx.createBiquadFilter(); lp3.type = 'lowpass'; lp3.frequency.value = 1800; lp3.Q.value = 0.5;
   bp.type = 'bandpass'; bp.Q.value = 0.8;   // wide = breathy, airy
   const v = 0.93 + Math.random() * 0.14;
   bp.frequency.setValueAtTime(f1 * v, t);
@@ -605,7 +607,7 @@ function slide(f1, f2, { peak = 0.05, attack = 0.07, hold = 0.04, release = 0.14
   g.gain.setValueCurveAtTime(curve, t, attack);
   g.gain.setValueAtTime(peak, t + attack + hold);
   g.gain.linearRampToValueAtTime(0, end);                    // glide out
-  src.connect(hp).connect(bp).connect(lp).connect(lp2).connect(g).connect(master);
+  src.connect(hp).connect(bp).connect(lp).connect(lp2).connect(lp3).connect(g).connect(master);
   src.start(t, Math.random() * 0.5); src.stop(end + 0.05);
 }
 // Win: soft muted plucks (the "Pluck" test's win).
@@ -758,7 +760,7 @@ document.addEventListener('touchend', e => {
 document.addEventListener('dblclick', e => e.preventDefault());
 
 if (!load()) deal(Date.now()); else { layout(); $('time').textContent = fmt(S.time); }
-const APP_VERSION = 'v39';
+const APP_VERSION = 'v40';
 $('ver').textContent = 'Version ' + APP_VERSION;
 function toast(msg, ms = 3000) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
