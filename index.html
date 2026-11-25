@@ -25,6 +25,7 @@
   #table { position:relative; flex:1; margin:0 auto; width:100%; max-width:640px; }
   footer { display:flex; justify-content:space-around; padding:6px 4px 10px; }
   button { font:inherit; font-size:15px; color:#fff; background:rgba(0,0,0,.25); border:0; border-radius:10px; padding:9px 14px; }
+  button { touch-action:manipulation; }
   button:active { background:rgba(0,0,0,.45); }
   button[hidden] { display:none; }
   .slot { position:absolute; width:var(--cw); height:var(--ch); border-radius:calc(var(--cw)*.12);
@@ -388,6 +389,15 @@ addEventListener('resize', () => {
 });
 document.addEventListener('visibilitychange', () => document.hidden && save());
 document.addEventListener('gesturestart', e => e.preventDefault());   // block iOS pinch zoom
+// Block iOS double-tap zoom (Safari ignores user-scalable=no). Cards use pointer events,
+// so cancelling the second touchend doesn't stop quick repeated taps on the table.
+let lastTouchEnd = 0;
+document.addEventListener('touchend', e => {
+  const now = Date.now();
+  if (now - lastTouchEnd < 350 && !e.target.closest('button')) e.preventDefault();
+  lastTouchEnd = now;
+}, { passive: false });
+document.addEventListener('dblclick', e => e.preventDefault());
 
 if (!load()) deal(Date.now()); else { layout(); $('time').textContent = fmt(S.time); }
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
