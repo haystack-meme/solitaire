@@ -98,6 +98,7 @@
   <button id="statsBtn">Statistics</button>
   <button id="restart">Restart this deal</button>
   <button id="menuClose">Close</button>
+  <div id="ver" style="text-align:center;font-size:12px;color:#888"></div>
 </div></div>
 <div id="stats"><div class="sheet">
   <h3>Statistics</h3>
@@ -527,6 +528,13 @@ function afterRotate() {
   setTimeout(relayout, 400);
 }
 addEventListener('orientationchange', afterRotate);
+// Most reliable: re-lay out whenever the table's real size changes, however late iOS gets there.
+let lastSize = '';
+if (window.ResizeObserver) new ResizeObserver(() => {
+  const size = table.clientWidth + 'x' + table.clientHeight;
+  if (size !== lastSize) { lastSize = size; relayout(); }
+}).observe(table);
+if (window.visualViewport) visualViewport.addEventListener('resize', relayout);
 if (screen.orientation) screen.orientation.addEventListener('change', afterRotate);
 document.addEventListener('visibilitychange', () => document.hidden && save());
 document.addEventListener('gesturestart', e => e.preventDefault());   // block iOS pinch zoom
@@ -541,6 +549,8 @@ document.addEventListener('touchend', e => {
 document.addEventListener('dblclick', e => e.preventDefault());
 
 if (!load()) deal(Date.now()); else { layout(); $('time').textContent = fmt(S.time); }
+const APP_VERSION = 'v9';
+$('ver').textContent = 'Version ' + APP_VERSION;
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
 
 // ---------- install button ----------
