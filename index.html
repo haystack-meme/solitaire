@@ -547,8 +547,8 @@ $('draw3').onclick = () => setDraw(3);
 $('restart').onclick = () => { $('menu').classList.remove('show'); deal(dealSeed); };
 
 // ---------- sound effects: soft synthesized clicks (Web Audio, no files) ----------
-// Volume 0-100 from the menu slider (0 = off). Default 50 = half the old fixed level.
-const VOL_DEFAULT = 50, VOL_MAX_GAIN = 0.6;
+// Volume 0-100 from the menu slider (0 = off). Default 35.
+const VOL_DEFAULT = 35, VOL_MAX_GAIN = 0.6;
 let volume = VOL_DEFAULT, actx = null, master = null;
 try {
   const v = localStorage.getItem('sol-volume');
@@ -573,7 +573,7 @@ document.addEventListener('pointerdown', unlockAudio, true);
 // Gentle slide: warm (pink) noise kept between ~500 Hz and ~2.5 kHz, where phone speakers are smooth.
 // It swells in, holds briefly and glides out, with the pitch drifting up like a card moving across felt.
 let pinkBuf = null;
-const SLIDE_TIME = 0.55, SLIDE_VOL = 0.6;   // overall: quicker and quieter
+const SLIDE_TIME = 0.4, SLIDE_VOL = 0.6;   // overall: quicker and quieter
 const SLIDE_RISE = 2.5;                     // >1 strengthens the upward pitch curve (1 = as written)
 function slide(f1, f2, { peak = 0.05, attack = 0.07, hold = 0.04, release = 0.14, delay = 0 } = {}) {
   peak *= SLIDE_VOL; attack *= SLIDE_TIME; hold *= SLIDE_TIME; release *= SLIDE_TIME;
@@ -757,7 +757,7 @@ document.addEventListener('touchend', e => {
 document.addEventListener('dblclick', e => e.preventDefault());
 
 if (!load()) deal(Date.now()); else { layout(); $('time').textContent = fmt(S.time); }
-const APP_VERSION = 'v37';
+const APP_VERSION = 'v38';
 $('ver').textContent = 'Version ' + APP_VERSION;
 function toast(msg, ms = 3000) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
