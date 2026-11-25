@@ -590,8 +590,9 @@ function slide(f1, f2, { peak = 0.05, attack = 0.07, hold = 0.04, release = 0.14
         lp = actx.createBiquadFilter(), g = actx.createGain();
   src.buffer = pinkBuf; src.loop = true;
   hp.type = 'highpass'; hp.frequency.value = 500;
-  lp.type = 'lowpass'; lp.frequency.value = 2500;
-  bp.type = 'bandpass'; bp.Q.value = 1.1;
+  lp.type = 'lowpass'; lp.frequency.value = 1800; lp.Q.value = 0.5;
+  const lp2 = actx.createBiquadFilter(); lp2.type = 'lowpass'; lp2.frequency.value = 2000; lp2.Q.value = 0.5;   // steeper roll-off = less grain
+  bp.type = 'bandpass'; bp.Q.value = 1.6;   // narrower = smoother, less scratchy
   const v = 0.93 + Math.random() * 0.14;
   bp.frequency.setValueAtTime(f1 * v, t);
   bp.frequency.exponentialRampToValueAtTime(f2 * v, end);   // exponential: flat at first, lifts toward the end
@@ -599,7 +600,7 @@ function slide(f1, f2, { peak = 0.05, attack = 0.07, hold = 0.04, release = 0.14
   g.gain.linearRampToValueAtTime(peak, t + attack);          // smooth swell, no edge
   g.gain.setValueAtTime(peak, t + attack + hold);
   g.gain.linearRampToValueAtTime(0, end);                    // glide out
-  src.connect(hp).connect(bp).connect(lp).connect(g).connect(master);
+  src.connect(hp).connect(bp).connect(lp).connect(lp2).connect(g).connect(master);
   src.start(t, Math.random() * 0.5); src.stop(end + 0.05);
 }
 // Win: soft muted plucks (the "Pluck" test's win).
@@ -752,7 +753,7 @@ document.addEventListener('touchend', e => {
 document.addEventListener('dblclick', e => e.preventDefault());
 
 if (!load()) deal(Date.now()); else { layout(); $('time').textContent = fmt(S.time); }
-const APP_VERSION = 'v33';
+const APP_VERSION = 'v34';
 $('ver').textContent = 'Version ' + APP_VERSION;
 function toast(msg, ms = 3000) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
