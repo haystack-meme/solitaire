@@ -207,6 +207,7 @@
       <span id="volLabel"></span>
     </div>
     <button id="statsBtn" class="btn">Statistics</button>
+    <button id="soundTest" class="btn">Sound Test (1 · 2 · 3)</button>
     <button id="restart" class="btn">Restart Deal</button>
     <button id="reloadBtn" class="btn" autocomplete="off"><svg><use href="#i-reload"/></svg>Check for Update</button>
     <button id="menuClose" class="btn gold">Resume</button>
@@ -623,7 +624,8 @@ function swoosh({ f1 = 700, f2 = 4500, dur = 0.22, peak = 0.06, rise = 0.015, q 
     const x = i / 12;
     g.gain.linearRampToValueAtTime(peak * Math.pow(1 - x, 1.6), t + rise + (dur - rise) * x);
   }
-  src.connect(bp).connect(g).connect(master);
+  const hp = actx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 300; hp.Q.value = 0.5;   // no sub-bass thud
+  src.connect(hp).connect(bp).connect(g).connect(master);
   src.start(t, Math.random() * 0.5); src.stop(end + 0.02);
 }
 // Win: soft muted plucks (the "Pluck" test's win).
@@ -655,6 +657,25 @@ function playSfx(name) {
     case 'win':        [330, 415, 494, 659].forEach((f, i) => pluck(f, i * 0.13)); break;
   }
 }
+// Temporary sound test: 1) a tone with a very slow 0.5 s fade-in (cannot "hit"), 2) the swoosh,
+// 3) the swoosh with a 0.5 s fade-in. If #1 still has a hammer at its start, the phone is adding it.
+function slowTone(delay) {
+  const t = soundStart() + delay, o = actx.createOscillator(), g = actx.createGain();
+  g.gain.value = 0; o.type = 'sine'; o.frequency.value = 800;
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.04, t + 0.5); g.gain.linearRampToValueAtTime(0, t + 0.8);
+  o.connect(g).connect(master); o.start(t); o.stop(t + 0.85);
+}
+$('soundTest').onclick = () => {
+  unlockAudio();
+  if (!soundOn) return toast('Turn the volume up first');
+  setTimeout(() => {
+    try {
+      toast('1: slow fade-in tone'); slowTone(0);
+      setTimeout(() => { toast('2: swoosh'); swoosh(); }, 1400);
+      setTimeout(() => { toast('3: swoosh, slow fade-in'); swoosh({ rise: 0.5, dur: 0.7 }); }, 2800);
+    } catch (e) { toast('Sound test failed: ' + e.message); }
+  }, 150);
+};
 function showVolume() {
   $('volSlider').value = volume;
   $('volSlider').style.setProperty('--fill', volume + '%');
@@ -781,7 +802,7 @@ document.addEventListener('touchend', e => {
 document.addEventListener('dblclick', e => e.preventDefault());
 
 if (!load()) deal(Date.now()); else { layout(); $('time').textContent = fmt(S.time); }
-const APP_VERSION = 'v52';
+const APP_VERSION = 'v53';
 $('ver').textContent = 'Version ' + APP_VERSION;
 function toast(msg, ms = 3000) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
