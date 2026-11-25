@@ -568,7 +568,7 @@ function slide(f1, f2, { peak = 0.05, attack = 0.07, hold = 0.04, release = 0.14
   bp.type = 'bandpass'; bp.Q.value = 1.1;
   const v = 0.93 + Math.random() * 0.14;
   bp.frequency.setValueAtTime(f1 * v, t);
-  bp.frequency.linearRampToValueAtTime(f2 * v, end);
+  bp.frequency.exponentialRampToValueAtTime(f2 * v, end);   // exponential: flat at first, lifts toward the end
   g.gain.setValueAtTime(0, t);
   g.gain.linearRampToValueAtTime(peak, t + attack);          // smooth swell, no edge
   g.gain.setValueAtTime(peak, t + attack + hold);
@@ -590,12 +590,12 @@ function pluck(freq, delay) {
 function sfx(name) {
   if (!soundOn || !actx || actx.state !== 'running') return;
   switch (name) {
-    case 'place':      slide(900, 1300); break;
-    case 'foundation': slide(1000, 1450); break;
-    case 'draw':       slide(1100, 1500, { peak: 0.04, attack: 0.05, hold: 0.03, release: 0.12 }); break;
+    case 'place':      slide(950, 1200); break;
+    case 'foundation': slide(1050, 1320); break;
+    case 'draw':       slide(1150, 1450, { peak: 0.04, attack: 0.05, hold: 0.03, release: 0.12 }); break;
     case 'undo':       slide(1300, 900, { peak: 0.04 }); break;                 // slides "backwards"
-    case 'recycle':    slide(800, 1400, { peak: 0.04, attack: 0.1, hold: 0.08, release: 0.22 }); break;
-    case 'shuffle':    for (let i = 0; i < 3; i++) slide(900, 1300, { peak: 0.035, attack: 0.05, hold: 0.02, release: 0.1, delay: i * 0.12 }); break;
+    case 'recycle':    slide(850, 1100, { peak: 0.04, attack: 0.1, hold: 0.08, release: 0.22 }); break;
+    case 'shuffle':    for (let i = 0; i < 3; i++) slide(950, 1200, { peak: 0.035, attack: 0.05, hold: 0.02, release: 0.1, delay: i * 0.12 }); break;
     case 'nope':       slide(700, 600, { peak: 0.035, attack: 0.04, hold: 0.02, release: 0.1 }); break;
     case 'win':        [330, 415, 494, 659].forEach((f, i) => pluck(f, i * 0.13)); break;
   }
@@ -718,7 +718,7 @@ document.addEventListener('touchend', e => {
 document.addEventListener('dblclick', e => e.preventDefault());
 
 if (!load()) deal(Date.now()); else { layout(); $('time').textContent = fmt(S.time); }
-const APP_VERSION = 'v29';
+const APP_VERSION = 'v30';
 $('ver').textContent = 'Version ' + APP_VERSION;
 function toast(msg, ms = 3000) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
