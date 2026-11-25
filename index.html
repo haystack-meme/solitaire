@@ -196,7 +196,6 @@ function move(from, idx, to) {
   if (src.length && from[0] === 't' && !lastCard(src).up) { lastCard(src).up = true; flipped = true; }
   S.moves++;
   sfx(to[0] === 'f' ? 'foundation' : 'place');
-  if (flipped) setTimeout(() => sfx('flip'), 90);
   after();
 }
 function drawStock() {
@@ -425,6 +424,16 @@ function unlockAudio() {
   loadSamples();
 }
 document.addEventListener('pointerdown', unlockAudio, true);
+// All sounds go through one quiet master volume with the harsh top end rolled off.
+let master = null;
+function out() {
+  if (!master) {
+    master = actx.createGain(); master.gain.value = 0.35;
+    const soften = actx.createBiquadFilter(); soften.type = 'lowpass'; soften.frequency.value = 5000;
+    master.connect(soften).connect(actx.destination);
+  }
+  return master;
+}
 let noiseBuf = null;
 function noise(t0, dur, freq, q, gain) {
   if (!noiseBuf) {
@@ -434,14 +443,14 @@ function noise(t0, dur, freq, q, gain) {
   const src = actx.createBufferSource(), f = actx.createBiquadFilter(), g = actx.createGain();
   src.buffer = noiseBuf; f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q;
   g.gain.setValueAtTime(gain, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
-  src.connect(f).connect(g).connect(actx.destination); src.start(t0); src.stop(t0 + dur + 0.02);
+  src.connect(f).connect(g).connect(out()); src.start(t0); src.stop(t0 + dur + 0.02);
 }
 function tone(t0, freq, dur, gain, type = 'sine') {
   const o = actx.createOscillator(), g = actx.createGain();
   o.type = type; o.frequency.value = freq;
   g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(gain, t0 + 0.01);
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  o.connect(g).connect(actx.destination); o.start(t0); o.stop(t0 + dur + 0.02);
+  o.connect(g).connect(out()); o.start(t0); o.stop(t0 + dur + 0.02);
 }
 // Recorded card sounds: Kenney "Casino Audio" (CC0, kenney.nl), converted to AAC for iOS.
 const SAMPLES = {
@@ -472,7 +481,7 @@ function sample(kind, { gain = 1, maxDur = 0, delay = 0 } = {}) {
   src.playbackRate.value = 0.94 + Math.random() * 0.12;      // slight variety between plays
   g.gain.value = gain;
   if (maxDur) { g.gain.setValueAtTime(gain, t + maxDur - 0.25); g.gain.linearRampToValueAtTime(0, t + maxDur); }
-  src.connect(g).connect(actx.destination);
+  src.connect(g).connect(out());
   src.start(t);
   if (maxDur) src.stop(t + maxDur + 0.05);
   return true;
@@ -484,11 +493,10 @@ function sfx(name) {
     case 'place':      if (sample('place')) return; break;
     case 'flip':       if (sample('draw', { gain: 0.6 })) return; break;
     case 'draw':       if (sample('draw')) return; break;
-    case 'undo':       if (sample('undo', { gain: 0.8 })) return; break;
-    case 'recycle':    if (sample('recycle')) return; break;
-    case 'shuffle':    if (sample('shuffle', { maxDur: 1.4, gain: 0.9 })) return; break;
-    case 'foundation': if (sample('place')) { tone(t + 0.03, 1046, 0.25, 0.07); return; } break;
-    case 'win':        sample('recycle'); break;
+    case 'undo':       if (sample('undo', { gain: 0.6 })) return; break;
+    case 'recycle':    if (sample('recycle', { gain: 0.6 })) return; break;
+    case 'shuffle':    if (sample('shuffle', { maxDur: 0.8, gain: 0.5 })) return; break;
+    case 'foundation': if (sample('place')) return; break;
   }
   synthSfx(name, t);
 }
@@ -501,8 +509,8 @@ function synthSfx(name, t) {
     case 'recycle':    for (let i = 0; i < 4; i++) noise(t + i * 0.035, 0.05, 2000, 1, 0.25); break;
     case 'shuffle':    for (let i = 0; i < 10; i++) noise(t + i * 0.03, 0.04, 1600 + Math.random() * 1600, 1, 0.22); break;
     case 'foundation': noise(t, 0.05, 1800, 1.2, 0.4); tone(t + 0.01, 880, 0.18, 0.12); break;
-    case 'nope':       tone(t, 140, 0.12, 0.2, 'triangle'); break;
-    case 'win':        [523, 659, 784, 1047].forEach((f, i) => tone(t + i * 0.12, f, 0.35, 0.15, 'triangle')); break;
+    case 'nope':       tone(t, 140, 0.1, 0.12, 'triangle'); break;
+    case 'win':        [523, 659, 784, 1047].forEach((f, i) => tone(t + i * 0.14, f, 0.3, 0.08, 'sine')); break;
   }
 }
 const showSound = () => { $('soundBtn').textContent = 'Sound: ' + (soundOn ? 'on' : 'off'); };
@@ -601,7 +609,7 @@ document.addEventListener('touchend', e => {
 document.addEventListener('dblclick', e => e.preventDefault());
 
 if (!load()) deal(Date.now()); else { layout(); $('time').textContent = fmt(S.time); }
-const APP_VERSION = 'v13';
+const APP_VERSION = 'v14';
 $('ver').textContent = 'Version ' + APP_VERSION;
 $('verTag').textContent = APP_VERSION;
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
