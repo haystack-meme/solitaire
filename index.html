@@ -588,36 +588,37 @@ document.addEventListener('visibilitychange', () => {
 });
 document.addEventListener('pointerdown', unlockAudio, true);
 
-// Soft rustle: no single hit. ~25-30 tiny grains of noise (1.5 ms each) scattered at random
-// under a smooth swell-and-fade, filtered to the airy 1.5-4 kHz range. Like a card brushing a card.
-// A few variants are pre-built once; each play picks one and nudges its speed slightly.
-const RUSTLE_LEN = 0.09, RUSTLE_GRAINS = 28;
-let rustles = null;
-function buildRustles() {
-  const sr = actx.sampleRate, len = Math.floor(sr * RUSTLE_LEN), gl = Math.floor(sr * 0.0015);
-  rustles = [];
-  for (let v = 0; v < 6; v++) {
-    const buf = actx.createBuffer(1, len, sr), d = buf.getChannelData(0);
-    for (let k = 0; k < RUSTLE_GRAINS; k++) {
-      const start = Math.floor(Math.random() * (len - gl));
-      const env = Math.pow(Math.sin(Math.PI * (start + gl / 2) / len), 2);     // smooth swell and fade
-      const amp = env * (0.5 + Math.random() * 0.5);
-      for (let i = 0; i < gl; i++) d[start + i] += (Math.random() * 2 - 1) * amp * Math.sin(Math.PI * i / gl);
-    }
-    rustles.push(buf);
+// Swoosh: pink noise through a band-pass whose pitch sweeps steeply up (accelerating, exponential)
+// while the volume fades from start to finish. Short eased fade-in so the start never hits.
+let swooshNoise = null;
+const SWOOSH_BEND = 2;            // pitch curve: 1 = steady exponential climb, 2 = slow start, shoots up at the end
+function swoosh({ f1 = 700, f2 = 4500, dur = 0.22, peak = 0.06, rise = 0.015, q = 1.4, delay = 0 } = {}) {
+  if (!swooshNoise) {
+    const len = actx.sampleRate; swooshNoise = actx.createBuffer(1, len, actx.sampleRate);
+    const d = swooshNoise.getChannelData(0); let b0 = 0, b1 = 0, b2 = 0;
+    for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1;
+      b0 = .99765 * b0 + w * .099046; b1 = .963 * b1 + w * .2965164; b2 = .57 * b2 + w * 1.0526913;
+      d[i] = (b0 + b1 + b2 + w * .1848) * .2; }
   }
-}
-function rustle({ peak = 0.12, rate = 1, delay = 0 } = {}) {
-  if (!rustles) buildRustles();
-  const t = actx.currentTime + 0.01 + delay;
-  const src = actx.createBufferSource(), hp = actx.createBiquadFilter(), lp = actx.createBiquadFilter(), g = actx.createGain();
-  src.buffer = rustles[Math.floor(Math.random() * rustles.length)];
-  src.playbackRate.value = rate * (0.94 + Math.random() * 0.12);
-  hp.type = 'highpass'; hp.frequency.value = 1500; hp.Q.value = 0.5;
-  lp.type = 'lowpass'; lp.frequency.value = 4000; lp.Q.value = 0.5;
-  g.gain.value = peak * 0.5;              // matched to the old tap's loudness
-  src.connect(hp).connect(lp).connect(g).connect(master);
-  src.start(t);
+  const t = actx.currentTime + 0.01 + delay, end = t + dur;
+  const src = actx.createBufferSource(), bp = actx.createBiquadFilter(), g = actx.createGain();
+  src.buffer = swooshNoise; src.loop = true;
+  bp.type = 'bandpass'; bp.Q.value = q;
+  const v = 0.95 + Math.random() * 0.1;
+  bp.frequency.setValueAtTime(f1 * v, t);
+  for (let i = 1; i <= 16; i++) {
+    const x = i / 16;
+    bp.frequency.linearRampToValueAtTime(f1 * v * Math.pow(f2 / f1, Math.pow(x, SWOOSH_BEND)), t + dur * x);
+  }
+  // volume: eased fade-in, then falls away as the pitch climbs
+  g.gain.setValueAtTime(0, t);
+  for (let i = 1; i <= 6; i++) g.gain.linearRampToValueAtTime(peak * (1 - Math.cos(Math.PI * i / 6)) / 2, t + rise * i / 6);
+  for (let i = 1; i <= 12; i++) {
+    const x = i / 12;
+    g.gain.linearRampToValueAtTime(peak * Math.pow(1 - x, 1.6), t + rise + (dur - rise) * x);
+  }
+  src.connect(bp).connect(g).connect(master);
+  src.start(t, Math.random() * 0.5); src.stop(end + 0.02);
 }
 // Win: soft muted plucks (the "Pluck" test's win).
 function pluck(freq, delay) {
@@ -637,13 +638,13 @@ function sfx(name) {
 function playSfx(name) {
   if (!soundOn || !actx || actx.state !== 'running') return;
   switch (name) {
-    case 'place':      rustle(); break;
-    case 'foundation': rustle({ rate: 1.08 }); break;
-    case 'draw':       rustle({ peak: 0.09, rate: 1.12 }); break;
-    case 'undo':       rustle({ peak: 0.09, rate: 0.9 }); break;
-    case 'recycle':    rustle({ peak: 0.09, rate: 0.8 }); rustle({ peak: 0.07, rate: 0.85, delay: 0.06 }); break;
-    case 'shuffle':    for (let i = 0; i < 3; i++) rustle({ peak: 0.08, delay: i * 0.07 }); break;
-    case 'nope':       rustle({ peak: 0.07, rate: 0.7 }); break;
+    case 'place':      swoosh(); break;
+    case 'foundation': swoosh({ f1: 800, f2: 5200 }); break;
+    case 'draw':       swoosh({ f1: 900, f2: 5000, dur: 0.16, peak: 0.045 }); break;
+    case 'undo':       swoosh({ f1: 4000, f2: 700, dur: 0.18, peak: 0.045 }); break;      // swooshes back down
+    case 'recycle':    swoosh({ f1: 500, f2: 4000, dur: 0.35, peak: 0.05 }); break;
+    case 'shuffle':    for (let i = 0; i < 3; i++) swoosh({ dur: 0.14, peak: 0.04, delay: i * 0.09 }); break;
+    case 'nope':       swoosh({ f1: 900, f2: 600, dur: 0.12, peak: 0.035 }); break;
     case 'win':        [330, 415, 494, 659].forEach((f, i) => pluck(f, i * 0.13)); break;
   }
 }
@@ -773,7 +774,7 @@ document.addEventListener('touchend', e => {
 document.addEventListener('dblclick', e => e.preventDefault());
 
 if (!load()) deal(Date.now()); else { layout(); $('time').textContent = fmt(S.time); }
-const APP_VERSION = 'v50';
+const APP_VERSION = 'v51';
 $('ver').textContent = 'Version ' + APP_VERSION;
 function toast(msg, ms = 3000) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
