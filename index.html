@@ -574,7 +574,7 @@ document.addEventListener('pointerdown', unlockAudio, true);
 // It swells in, holds briefly and glides out, with the pitch drifting up like a card moving across felt.
 let pinkBuf = null;
 const SLIDE_TIME = 0.55, SLIDE_VOL = 0.6;   // overall: quicker and quieter
-const SLIDE_RISE = 1.7;                     // >1 strengthens the upward pitch curve (1 = as written)
+const SLIDE_RISE = 2.5;                     // >1 strengthens the upward pitch curve (1 = as written)
 function slide(f1, f2, { peak = 0.05, attack = 0.07, hold = 0.04, release = 0.14, delay = 0 } = {}) {
   peak *= SLIDE_VOL; attack *= SLIDE_TIME; hold *= SLIDE_TIME; release *= SLIDE_TIME;
   if (f2 > f1) f2 = f1 * Math.pow(f2 / f1, SLIDE_RISE);
@@ -753,7 +753,7 @@ document.addEventListener('touchend', e => {
 document.addEventListener('dblclick', e => e.preventDefault());
 
 if (!load()) deal(Date.now()); else { layout(); $('time').textContent = fmt(S.time); }
-const APP_VERSION = 'v35';
+const APP_VERSION = 'v36';
 $('ver').textContent = 'Version ' + APP_VERSION;
 function toast(msg, ms = 3000) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
