@@ -123,16 +123,6 @@
   .seg { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
   .seg .btn:not(.on) { --top:#2b5a3d; --bot:#1c3f2a; --edge:#0c2416; opacity:.85; }
   .seg .btn.on { --top:#ffe07a; --bot:#f0a91e; --edge:#9a5f05; color:var(--ink); text-shadow:none; }
-  .vol { display:flex; align-items:center; gap:12px; padding:10px 14px; border-radius:14px;
-         background:rgba(0,0,0,.25); box-shadow:inset 0 2px 6px rgba(0,0,0,.35); }
-  .vol svg { width:26px; height:26px; color:var(--gold); flex:none; }
-  .vol span { font-family:var(--display); color:var(--gold); min-width:3.2ch; text-align:right; font-variant-numeric:tabular-nums; }
-  .vol input { flex:1; -webkit-appearance:none; appearance:none; height:10px; border-radius:6px; margin:0;
-               background:linear-gradient(90deg, var(--gold) var(--fill,50%), rgba(0,0,0,.45) var(--fill,50%));
-               box-shadow:inset 0 1px 2px rgba(0,0,0,.5); touch-action:pan-x; }
-  .vol input::-webkit-slider-thumb { -webkit-appearance:none; width:28px; height:28px; border-radius:50%;
-               background:linear-gradient(#ffe07a,#f0a91e); box-shadow:0 3px 0 #9a5f05, 0 4px 8px rgba(0,0,0,.4), inset 0 2px 0 rgba(255,255,255,.6); }
-  .vol input::-moz-range-thumb { width:28px; height:28px; border:0; border-radius:50%; background:#f0a91e; }
   .panel .small { font-size:12px; text-align:center; opacity:.6; }
   @keyframes pop { from { transform:scale(.7); opacity:0; } }
   @keyframes fade { from { opacity:0; } }
@@ -201,11 +191,6 @@
   <div class="ribbon">Menu</div>
   <div class="stack">
     <div class="seg"><button id="draw1" class="btn">Draw 1</button><button id="draw3" class="btn">Draw 3</button></div>
-    <div class="vol">
-      <svg viewBox="0 0 24 24"><path fill="currentColor" d="M4 9h4l5-4v14l-5-4H4z"/><path id="volWaves" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M16 9.5a3.5 3.5 0 0 1 0 5M18.5 7a7 7 0 0 1 0 10"/></svg>
-      <input id="volSlider" type="range" min="0" max="100" step="1" aria-label="Volume">
-      <span id="volLabel"></span>
-    </div>
     <button id="statsBtn" class="btn">Statistics</button>
     <button id="restart" class="btn">Restart Deal</button>
     <button id="reloadBtn" class="btn" autocomplete="off"><svg><use href="#i-reload"/></svg>Check for Update</button>
@@ -272,7 +257,6 @@ function deal(seed) {
   undoStack = [];
   $('win').classList.remove('show');
   save(); layout();
-  sfx('shuffle');
 }
 
 const snapshot = () => JSON.stringify(S);
@@ -311,10 +295,8 @@ function move(from, idx, to) {
   pushUndo();
   const src = pile(from), cards = src.splice(idx);
   pile(to).push(...cards);
-  let flipped = false;
-  if (src.length && from[0] === 't' && !lastCard(src).up) { lastCard(src).up = true; flipped = true; }
+  if (src.length && from[0] === 't' && !lastCard(src).up) lastCard(src).up = true;
   S.moves++;
-  sfx(to[0] === 'f' ? 'foundation' : 'place');
   after();
 }
 function drawStock() {
@@ -323,10 +305,8 @@ function drawStock() {
     if (!S.waste.length) { undoStack.pop(); return; }
     S.stock = S.waste.reverse().map(c => ({ ...c, up: false }));
     S.waste = [];
-    sfx('recycle');
   } else {
     for (let i = 0; i < drawCount && S.stock.length; i++) { const c = S.stock.pop(); c.up = true; S.waste.push(c); }
-    sfx('draw');
   }
   S.moves++;
   after();
@@ -337,7 +317,6 @@ function after() {
     $('winText').textContent = `${S.moves} moves in ${fmt(S.time)}`;
     $('winBest').textContent = recordWin();
     setTimeout(() => { $('win').classList.add('show'); confetti(); }, 400);
-    setTimeout(() => sfx('win'), 250);
   }
   save(); layout();
 }
@@ -490,7 +469,7 @@ function endDrag(e, cancelled) {
   if (!d.moved) {
     const to = bestTarget(d.from, d.idx);
     if (to) return move(d.from, d.idx, to);
-    sfx('nope'); return layout();
+    return layout();
   }
   // drop on the pile whose area overlaps the dragged card the most
   const r0 = d.cards[0].getBoundingClientRect(), tr = table.getBoundingClientRect();
@@ -507,14 +486,14 @@ function endDrag(e, cancelled) {
     const dist = Math.hypot(cx - (x + geo.cw / 2), cy - (y + geo.ch / 2));
     if (dist < bestDist && Math.abs(cx - (x + geo.cw / 2)) < geo.cw * 0.9 && Math.abs(cy - (y + geo.ch / 2)) < geo.ch * 1.1) { best = id; bestDist = dist; }
   }
-  if (best) move(d.from, d.idx, best); else { sfx('nope'); layout(); }
+  if (best) move(d.from, d.idx, best); else layout();
 }
 table.addEventListener('pointerup', e => endDrag(e, false));
 table.addEventListener('pointercancel', e => endDrag(e, true));
 table.addEventListener('lostpointercapture', e => endDrag(e, true));   // never leave a drag hanging
 
 // ---------- buttons ----------
-$('undoBtn').onclick = () => { if (!undoStack.length) return; const t = S.time; S = JSON.parse(undoStack.pop()); S.time = t; S.moves++; save(); layout(); sfx('undo'); };
+$('undoBtn').onclick = () => { if (!undoStack.length) return; const t = S.time; S = JSON.parse(undoStack.pop()); S.time = t; S.moves++; save(); layout(); };
 // In-game confirm panel (replaces the browser's confirm box). Resolves true/false.
 function ask(title, text, yesLabel, danger = false) {
   return new Promise(done => {
@@ -548,128 +527,6 @@ const setDraw = n => { $('menu').classList.remove('show'); if (n === drawCount) 
 $('draw1').onclick = () => setDraw(1);
 $('draw3').onclick = () => setDraw(3);
 $('restart').onclick = () => { $('menu').classList.remove('show'); deal(dealSeed); };
-
-// ---------- sound effects: soft synthesized clicks (Web Audio, no files) ----------
-// Volume 0-100 from the menu slider (0 = off). Default 35.
-const VOL_DEFAULT = 35, VOL_MAX_GAIN = 0.6;
-let volume = VOL_DEFAULT, actx = null, master = null;
-try {
-  const v = localStorage.getItem('sol-volume');
-  if (v !== null) volume = Math.max(0, Math.min(100, +v || 0));
-  else if (localStorage.getItem('sol-sound') === 'off') volume = 0;      // carry over the old on/off switch
-} catch {}
-const soundGain = () => (volume / 100) * VOL_MAX_GAIN;
-let soundOn = volume > 0;
-// 'ambient' = follows the iPhone's silent switch and mixes with other audio
-try { if (navigator.audioSession) navigator.audioSession.type = 'ambient'; } catch {}
-function unlockAudio() {
-  if (!soundOn) return;
-  if (!actx) {
-    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
-    actx = new AC();
-    master = actx.createGain(); master.gain.value = soundGain(); master.connect(actx.destination);
-    keepAwake();
-  }
-  if (actx.state !== 'running') actx.resume();
-}
-// Keep the audio output awake with an inaudible signal (about -85 dB). Otherwise iOS powers the
-// speaker down between sounds, and waking it makes a thump just before each sound.
-function keepAwake() {
-  const len = actx.sampleRate * 2, buf = actx.createBuffer(1, len, actx.sampleRate), d = buf.getChannelData(0);
-  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
-  const src = actx.createBufferSource(), g = actx.createGain();
-  src.buffer = buf; src.loop = true; g.gain.value = 0.00006;
-  src.connect(g).connect(actx.destination); src.start();
-}
-// Pause audio in the background (saves battery); it resumes on the next touch.
-document.addEventListener('visibilitychange', () => {
-  if (!actx) return;
-  try { if (document.hidden) actx.suspend(); else if (soundOn) actx.resume(); } catch {}
-});
-document.addEventListener('pointerdown', unlockAudio, true);
-
-// Schedule sounds a little ahead (60 ms + the device's reported output latency). If the phone handles
-// the request late, the start is still in the future, so the soft fade-in is never skipped.
-const SOUND_LEAD = 0.06;
-const soundStart = () => actx.currentTime + SOUND_LEAD + (actx.baseLatency || 0);
-
-// Swell: soft pink noise (no pitch, so nothing rings) with smooth straight-ramp fade in and out
-// (nothing hits). Its brightness sweeps gently up on an S-curve. Muffled: 300 Hz - 2 kHz.
-const SWELL_IN = 0.12, SWELL_OUT = 0.15;
-let swellNoise = null;
-function swell(f1, { f2 = f1 * 2, peak = 0.09, fadeIn = SWELL_IN, fadeOut = SWELL_OUT, delay = 0 } = {}) {
-  if (!swellNoise) {
-    const len = actx.sampleRate; swellNoise = actx.createBuffer(1, len, actx.sampleRate);
-    const d = swellNoise.getChannelData(0); let b0 = 0, b1 = 0, b2 = 0;
-    for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1;
-      b0 = .99765 * b0 + w * .099046; b1 = .963 * b1 + w * .2965164; b2 = .57 * b2 + w * 1.0526913;
-      d[i] = (b0 + b1 + b2 + w * .1848) * .2; }
-  }
-  const t = soundStart() + delay, dur = fadeIn + fadeOut;
-  const src = actx.createBufferSource(), hp = actx.createBiquadFilter(), bp = actx.createBiquadFilter(),
-        lp = actx.createBiquadFilter(), g = actx.createGain();
-  g.gain.value = 0;
-  src.buffer = swellNoise; src.loop = true;
-  hp.type = 'highpass'; hp.frequency.value = 300; hp.Q.value = 0.5;
-  lp.type = 'lowpass'; lp.frequency.value = 2000; lp.Q.value = 0.5;
-  bp.type = 'bandpass'; bp.Q.value = 0.7;
-  bp.frequency.setValueAtTime(f1, t);
-  for (let i = 1; i <= 12; i++) {
-    const x = i / 12;
-    bp.frequency.linearRampToValueAtTime(f1 * Math.pow(f2 / f1, (1 - Math.cos(Math.PI * x)) / 2), t + dur * x);
-  }
-  g.gain.setValueAtTime(0, t);
-  peak *= 0.55;                              // keep it quiet
-  g.gain.linearRampToValueAtTime(peak, t + fadeIn);
-  g.gain.linearRampToValueAtTime(0, t + dur);
-  src.connect(hp).connect(bp).connect(lp).connect(g).connect(master);
-  src.start(t, Math.random() * 0.5); src.stop(t + dur + 0.02);
-}
-// Win: soft muted plucks (the "Pluck" test's win).
-function pluck(freq, delay) {
-  const t = soundStart() + delay;
-  const o = actx.createOscillator(), g = actx.createGain(), f = actx.createBiquadFilter();
-  o.type = 'triangle'; o.frequency.value = freq; f.type = 'lowpass'; f.frequency.value = 1100;
-  g.gain.value = 0.0001;
-  g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(0.09, t + 0.004);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.454);
-  o.connect(g).connect(f).connect(master);
-  o.start(t); o.stop(t + 0.5);
-}
-// Sound must never break gameplay: any audio error is swallowed.
-function sfx(name) {
-  try { playSfx(name); } catch (e) { console.warn('sound failed:', name, e); }
-}
-function playSfx(name) {
-  if (!soundOn || !actx || actx.state !== 'running') return;
-  switch (name) {
-    case 'place':      swell(800); break;
-    case 'foundation': swell(900); break;
-    case 'draw':       swell(950, { peak: 0.07, fadeIn: 0.09, fadeOut: 0.12 }); break;
-    case 'undo':       swell(1400, { f2: 700, peak: 0.07 }); break;                     // sweeps back down
-    case 'recycle':    swell(700, { peak: 0.07, fadeIn: 0.18, fadeOut: 0.2 }); break;
-    case 'shuffle':    swell(750, { peak: 0.07, fadeIn: 0.2, fadeOut: 0.2 }); break;
-    case 'nope':       swell(700, { f2: 600, peak: 0.05, fadeIn: 0.08, fadeOut: 0.1 }); break;
-    case 'win':        [330, 415, 494, 659].forEach((f, i) => pluck(f, i * 0.13)); break;
-  }
-}
-function showVolume() {
-  $('volSlider').value = volume;
-  $('volSlider').style.setProperty('--fill', volume + '%');
-  $('volLabel').textContent = volume ? volume : 'Off';
-  $('volWaves').style.opacity = volume ? 1 : 0.15;
-}
-$('volSlider').addEventListener('input', e => {
-  volume = +e.target.value; soundOn = volume > 0;
-  if (master) master.gain.value = soundGain();
-  showVolume();
-});
-$('volSlider').addEventListener('change', () => {          // on release: save and play a sample at the new level
-  try { localStorage.setItem('sol-volume', String(volume)); } catch {}
-  if (soundOn) { unlockAudio(); setTimeout(() => sfx('place'), 30); }
-});
-showVolume();
 
 // ---------- statistics (per device, separate for Draw 1 and Draw 3) ----------
 const blankStats = () => ({ played: 0, won: 0, bestTime: null, bestMoves: null, streak: 0, bestStreak: 0 });
@@ -780,7 +637,7 @@ document.addEventListener('touchend', e => {
 document.addEventListener('dblclick', e => e.preventDefault());
 
 if (!load()) deal(Date.now()); else { layout(); $('time').textContent = fmt(S.time); }
-const APP_VERSION = 'v57';
+const APP_VERSION = 'v58';
 $('ver').textContent = 'Version ' + APP_VERSION;
 function toast(msg, ms = 3000) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
