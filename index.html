@@ -205,6 +205,14 @@
     <button id="statsReset" class="btn red">Reset Statistics</button>
   </div>
 </div></div>
+<div id="ask" class="overlay"><div class="panel">
+  <div class="ribbon" id="askTitle"></div>
+  <p id="askText" style="font-size:17px;margin:4px 0 16px"></p>
+  <div class="stack">
+    <button id="askYes" class="btn gold"></button>
+    <button id="askNo" class="btn">Cancel</button>
+  </div>
+</div></div>
 <div id="install" class="overlay"><div class="panel">
   <div class="ribbon">Install</div>
   <ol>
@@ -488,7 +496,22 @@ table.addEventListener('pointercancel', e => endDrag(e, true));
 
 // ---------- buttons ----------
 $('undoBtn').onclick = () => { if (!undoStack.length) return; const t = S.time; S = JSON.parse(undoStack.pop()); S.time = t; S.moves++; save(); layout(); sfx('undo'); };
-$('newBtn').onclick = () => { if (S.moves && !S.won && !confirm('Start a new game?')) return; deal(Date.now()); };
+// In-game confirm panel (replaces the browser's confirm box). Resolves true/false.
+function ask(title, text, yesLabel, danger = false) {
+  return new Promise(done => {
+    $('askTitle').textContent = title; $('askText').textContent = text; $('askYes').textContent = yesLabel;
+    $('askYes').className = 'btn ' + (danger ? 'red' : 'gold');
+    const close = v => { $('ask').classList.remove('show'); done(v); };
+    $('askYes').onclick = () => close(true);
+    $('askNo').onclick = () => close(false);
+    $('ask').onclick = e => { if (e.target.id === 'ask') close(false); };
+    $('ask').classList.add('show');
+  });
+}
+$('newBtn').onclick = async () => {
+  if (S.moves && !S.won && !await ask('New Game', 'Leave this game and deal a new one?', 'Deal New Game')) return;
+  deal(Date.now());
+};
 $('winNew').onclick = () => deal(Date.now());
 $('autoBtn').onclick = autoFinish;
 $('hintBtn').onclick = () => {
@@ -619,8 +642,8 @@ function showStats() {
 $('statsBtn').onclick = showStats;
 $('statsClose').onclick = () => $('stats').classList.remove('show');
 $('stats').onclick = e => { if (e.target.id === 'stats') $('stats').classList.remove('show'); };
-$('statsReset').onclick = () => {
-  if (!confirm('Reset all statistics?')) return;
+$('statsReset').onclick = async () => {
+  if (!await ask('Reset', 'Erase all statistics and best times? This can\'t be undone.', 'Reset Statistics', true)) return;
   stats = { 1: blankStats(), 3: blankStats() }; saveStats(); showStats();
 };
 
@@ -689,7 +712,7 @@ document.addEventListener('touchend', e => {
 document.addEventListener('dblclick', e => e.preventDefault());
 
 if (!load()) deal(Date.now()); else { layout(); $('time').textContent = fmt(S.time); }
-const APP_VERSION = 'v26';
+const APP_VERSION = 'v27';
 $('ver').textContent = 'Version ' + APP_VERSION;
 function toast(msg, ms = 3000) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
