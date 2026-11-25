@@ -518,37 +518,67 @@ function unlockAudio() {
     const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
     actx = new AC();
     master = actx.createGain(); master.gain.value = 0.5;
-    const soften = actx.createBiquadFilter(); soften.type = 'lowpass'; soften.frequency.value = 2500;
+    const soften = actx.createBiquadFilter(); soften.type = 'lowpass'; soften.frequency.value = 1200;
     master.connect(soften).connect(actx.destination);
   }
   if (actx.state !== 'running') actx.resume();
 }
 document.addEventListener('pointerdown', unlockAudio, true);
 
-// One soft tick: a sine blip with a near-instant (but click-free) attack and a quick decay.
-function tick(freq, { gain = 0.12, decay = 0.045, delay = 0 } = {}) {
+// Soft "thup": low sine, gentle fade-in, smooth fade-out (no sharp attack, no bright tones).
+function thup(freq, { gain = 0.22, attack = 0.012, decay = 0.16, delay = 0 } = {}) {
   const t = actx.currentTime + delay;
   const o = actx.createOscillator(), g = actx.createGain();
   o.type = 'sine';
-  o.frequency.setValueAtTime(freq * (0.98 + Math.random() * 0.04), t);
-  o.frequency.exponentialRampToValueAtTime(freq * 0.7, t + decay);      // tiny downward "tok"
+  o.frequency.setValueAtTime(freq * (0.97 + Math.random() * 0.06), t);
+  o.frequency.exponentialRampToValueAtTime(freq * 0.85, t + decay);
   g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(gain, t + 0.004);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+  g.gain.exponentialRampToValueAtTime(gain, t + attack);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + attack + decay);
   o.connect(g).connect(master);
-  o.start(t); o.stop(t + decay + 0.02);
+  o.start(t); o.stop(t + attack + decay + 0.05);
+}
+// Soft whoosh: noise through a low band-pass, eased in and out.
+let noiseBuf = null;
+function whoosh({ freq = 700, gain = 0.12, attack = 0.03, decay = 0.14, delay = 0 } = {}) {
+  if (!noiseBuf) {
+    noiseBuf = actx.createBuffer(1, actx.sampleRate * 0.6, actx.sampleRate);
+    const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
+  const t = actx.currentTime + delay;
+  const src = actx.createBufferSource(), f = actx.createBiquadFilter(), g = actx.createGain();
+  src.buffer = noiseBuf; f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = 0.7;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(gain, t + attack);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + attack + decay);
+  src.connect(f).connect(g).connect(master);
+  src.start(t); src.stop(t + attack + decay + 0.05);
+}
+// Warm swell for a win: a low major chord that fades in and out slowly.
+function swell(freqs, { gain = 0.06, attack = 0.35, hold = 0.3, release = 1.4 } = {}) {
+  const t = actx.currentTime;
+  freqs.forEach(fr => {
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = 'sine'; o.frequency.value = fr;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + attack);
+    g.gain.setValueAtTime(gain, t + attack + hold);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + attack + hold + release);
+    o.connect(g).connect(master);
+    o.start(t); o.stop(t + attack + hold + release + 0.05);
+  });
 }
 function sfx(name) {
   if (!soundOn || !actx || actx.state !== 'running') return;
   switch (name) {
-    case 'place':      tick(900); break;
-    case 'draw':       tick(1150, { gain: 0.09 }); break;
-    case 'undo':       tick(700, { gain: 0.09 }); break;
-    case 'foundation': tick(1200); break;
-    case 'recycle':    tick(800, { gain: 0.08 }); tick(950, { gain: 0.08, delay: 0.06 }); break;
-    case 'shuffle':    for (let i = 0; i < 3; i++) tick(850 + i * 120, { gain: 0.07, delay: i * 0.07 }); break;
-    case 'nope':       tick(320, { gain: 0.1, decay: 0.06 }); break;
-    case 'win':        [660, 830, 990, 1320].forEach((f, i) => tick(f, { gain: 0.09, decay: 0.25, delay: i * 0.13 })); break;
+    case 'place':      thup(220); whoosh({ freq: 600, gain: 0.05, decay: 0.08 }); break;
+    case 'foundation': thup(262); whoosh({ freq: 650, gain: 0.05, decay: 0.08 }); break;
+    case 'draw':       whoosh({ freq: 800, gain: 0.1 }); break;
+    case 'undo':       whoosh({ freq: 550, gain: 0.08, decay: 0.12 }); break;
+    case 'recycle':    whoosh({ freq: 600, gain: 0.1, attack: 0.08, decay: 0.3 }); break;
+    case 'shuffle':    whoosh({ freq: 700, gain: 0.08, attack: 0.1, decay: 0.35 }); break;
+    case 'nope':       thup(150, { gain: 0.16, decay: 0.12 }); break;
+    case 'win':        swell([196, 247, 294, 392]); break;          // soft G major
   }
 }
 const showSound = () => { $('soundBtn').textContent = 'Sound: ' + (soundOn ? 'on' : 'off'); };
@@ -669,7 +699,7 @@ document.addEventListener('touchend', e => {
 document.addEventListener('dblclick', e => e.preventDefault());
 
 if (!load()) deal(Date.now()); else { layout(); $('time').textContent = fmt(S.time); }
-const APP_VERSION = 'v22';
+const APP_VERSION = 'v23';
 $('ver').textContent = 'Version ' + APP_VERSION;
 function toast(msg, ms = 3000) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
