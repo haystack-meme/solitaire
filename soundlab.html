@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sound test</title>
+<style>
+  body { margin:0; padding:16px 16px calc(24px + env(safe-area-inset-bottom)); background:#0f4a29; color:#fff;
+         font-family:-apple-system, system-ui, sans-serif; }
+  h1 { font-size:20px; margin:8px 0 4px; }
+  p.note { opacity:.7; font-size:14px; margin:0 0 14px; }
+  .style { background:rgba(0,0,0,.25); border-radius:14px; padding:12px; margin-bottom:12px; }
+  .style h2 { font-size:17px; margin:0 0 2px; }
+  .style p { margin:0 0 10px; font-size:13px; opacity:.7; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; }
+  button { font:inherit; font-size:15px; color:#fff; background:rgba(255,255,255,.14); border:0; border-radius:10px;
+           padding:10px 12px; touch-action:manipulation; }
+  button:active { background:rgba(255,255,255,.3); }
+  label { display:flex; align-items:center; gap:10px; margin:0 0 14px; font-size:14px; }
+  input[type=range] { flex:1; }
+</style>
+</head>
+<body>
+<h1>Sound test</h1>
+<p class="note">Tap the buttons to hear each style, then tell me the letter you like. Turn the silent switch off.</p>
+<label>Volume <input id="vol" type="range" min="0" max="1" step="0.05" value="0.6"></label>
+<div id="list"></div>
+
+<script>
+let ctx, out;
+function ac() {
+  if (!ctx) {
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    out = ctx.createGain(); out.gain.value = +document.getElementById('vol').value; out.connect(ctx.destination);
+  }
+  if (ctx.state !== 'running') ctx.resume();
+  return ctx;
+}
+document.getElementById('vol').oninput = e => { if (out) out.gain.value = +e.target.value; };
+
+let noiseBuf;
+function noise() {
+  if (!noiseBuf) { noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+    const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+  const s = ctx.createBufferSource(); s.buffer = noiseBuf; s.loop = true; return s;
+}
+function env(g, t, peak, a, d) {
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(peak, t + a);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + a + d);
+}
+function tone(f, { type = 'sine', peak = 0.1, a = 0.01, d = 0.15, delay = 0, glide = 1, lp = 0 } = {}) {
+  const t = ctx.currentTime + delay, o = ctx.createOscillator(), g = ctx.createGain();
+  o.type = type; o.frequency.setValueAtTime(f, t);
+  if (glide !== 1) o.frequency.exponentialRampToValueAtTime(f * glide, t + a + d);
+  env(g, t, peak, a, d);
+  let n = o.connect(g);
+  if (lp) { const f2 = ctx.createBiquadFilter(); f2.type = 'lowpass'; f2.frequency.value = lp; n = n.connect(f2); }
+  n.connect(out); o.start(t); o.stop(t + a + d + 0.05);
+}
+function air({ type = 'highpass', f = 3000, q = 0.5, peak = 0.05, a = 0.02, d = 0.1, delay = 0 } = {}) {
+  const t = ctx.currentTime + delay, s = noise(), fl = ctx.createBiquadFilter(), g = ctx.createGain();
+  fl.type = type; fl.frequency.value = f; fl.Q.value = q; env(g, t, peak, a, d);
+  s.connect(fl).connect(g).connect(out); s.start(t, Math.random() * .5); s.stop(t + a + d + 0.05);
+}
+const rnd = (x, p = 0.04) => x * (1 - p + Math.random() * 2 * p);
+
+const STYLES = [
+  { id: 'A', name: 'Bubble', desc: 'Round little pops that rise slightly in pitch.',
+    place: () => tone(rnd(520), { peak: .12, a: .006, d: .09, glide: 1.5 }),
+    draw: () => tone(rnd(660), { peak: .08, a: .006, d: .07, glide: 1.4 }),
+    win: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, { peak: .08, a: .01, d: .12, glide: 1.3, delay: i * .1 })) },
+  { id: 'B', name: 'Paper', desc: 'Light, airy rustle. Very quiet, no tone at all.',
+    place: () => air({ type: 'bandpass', f: rnd(2500, .1), q: .6, peak: .09, a: .012, d: .07 }),
+    draw: () => air({ type: 'highpass', f: 3500, peak: .06, a: .03, d: .12 }),
+    win: () => { for (let i = 0; i < 4; i++) air({ type: 'bandpass', f: 2000 + i * 500, q: .6, peak: .06, a: .04, d: .2, delay: i * .12 }); } },
+  { id: 'C', name: 'Soft marimba', desc: 'Mellow wooden note, rounded and short.',
+    place: () => { const f = rnd(392, .02); tone(f, { peak: .12, a: .008, d: .22, lp: 1500 }); tone(f * 4, { peak: .015, a: .004, d: .05 }); },
+    draw: () => { const f = rnd(523, .02); tone(f, { peak: .08, a: .008, d: .16, lp: 1500 }); },
+    win: () => [392, 494, 587, 784].forEach((f, i) => { tone(f, { peak: .1, a: .01, d: .5, delay: i * .14, lp: 1500 }); tone(f * 4, { peak: .01, a: .004, d: .06, delay: i * .14 }); }) },
+  { id: 'D', name: 'Glass', desc: 'Faint, clear, high, very short. Like a light tap on a glass.',
+    place: () => tone(rnd(1400, .02), { peak: .04, a: .003, d: .18 }),
+    draw: () => tone(rnd(1760, .02), { peak: .03, a: .003, d: .14 }),
+    win: () => [1047, 1319, 1568, 2093].forEach((f, i) => tone(f, { peak: .035, a: .004, d: .5, delay: i * .12 })) },
+  { id: 'E', name: 'Whisper', desc: 'Barely-there breath of air. The quietest option.',
+    place: () => air({ type: 'bandpass', f: rnd(1500, .1), q: .4, peak: .035, a: .03, d: .09 }),
+    draw: () => air({ type: 'bandpass', f: 2200, q: .4, peak: .03, a: .04, d: .12 }),
+    win: () => air({ type: 'bandpass', f: 1800, q: .3, peak: .04, a: .3, d: .9 }) },
+  { id: 'F', name: 'Pluck', desc: 'Soft muted string pluck, warm but not low.',
+    place: () => tone(rnd(330, .02), { type: 'triangle', peak: .1, a: .004, d: .16, lp: 900 }),
+    draw: () => tone(rnd(440, .02), { type: 'triangle', peak: .07, a: .004, d: .12, lp: 1000 }),
+    win: () => [330, 415, 494, 659].forEach((f, i) => tone(f, { type: 'triangle', peak: .09, a: .004, d: .45, lp: 1100, delay: i * .13 })) },
+];
+
+const list = document.getElementById('list');
+for (const st of STYLES) {
+  const div = document.createElement('div'); div.className = 'style';
+  div.innerHTML = `<h2>${st.id}. ${st.name}</h2><p>${st.desc}</p><div class="row"></div>`;
+  const row = div.querySelector('.row');
+  const add = (label, fn) => { const b = document.createElement('button'); b.textContent = label;
+    b.onclick = () => { ac(); fn(); }; row.appendChild(b); };
+  add('Place card', st.place);
+  add('Draw', st.draw);
+  add('3 moves', () => { st.place(); setTimeout(st.place, 280); setTimeout(st.draw, 560); });
+  add('Win', st.win);
+  list.appendChild(div);
+}
+</script>
+</body>
+</html>
