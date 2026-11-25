@@ -588,35 +588,36 @@ document.addEventListener('visibilitychange', () => {
 });
 document.addEventListener('pointerdown', unlockAudio, true);
 
-// Soft tap (the v47 sound: soft noise contact + a tiny tone underneath) with a gentle, eased
-// 12 ms fade-in on both parts, so it never comes in hard.
-let tapNoise = null;
-const TAP_RISE = 0.012;
-function easeIn(param, peak, t, dur) {
-  param.setValueAtTime(0, t);
-  for (let i = 1; i <= 8; i++) param.linearRampToValueAtTime(peak * Math.pow((1 - Math.cos(Math.PI * i / 8)) / 2, 1.5), t + dur * i / 8);
-}
-function tap(freq, { peak = 0.05, delay = 0 } = {}) {
-  if (!tapNoise) {
-    tapNoise = actx.createBuffer(1, actx.sampleRate * 0.5, actx.sampleRate);
-    const d = tapNoise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+// Soft rustle: no single hit. ~25-30 tiny grains of noise (1.5 ms each) scattered at random
+// under a smooth swell-and-fade, filtered to the airy 1.5-4 kHz range. Like a card brushing a card.
+// A few variants are pre-built once; each play picks one and nudges its speed slightly.
+const RUSTLE_LEN = 0.09, RUSTLE_GRAINS = 28;
+let rustles = null;
+function buildRustles() {
+  const sr = actx.sampleRate, len = Math.floor(sr * RUSTLE_LEN), gl = Math.floor(sr * 0.0015);
+  rustles = [];
+  for (let v = 0; v < 6; v++) {
+    const buf = actx.createBuffer(1, len, sr), d = buf.getChannelData(0);
+    for (let k = 0; k < RUSTLE_GRAINS; k++) {
+      const start = Math.floor(Math.random() * (len - gl));
+      const env = Math.pow(Math.sin(Math.PI * (start + gl / 2) / len), 2);     // smooth swell and fade
+      const amp = env * (0.5 + Math.random() * 0.5);
+      for (let i = 0; i < gl; i++) d[start + i] += (Math.random() * 2 - 1) * amp * Math.sin(Math.PI * i / gl);
+    }
+    rustles.push(buf);
   }
+}
+function rustle({ peak = 0.12, rate = 1, delay = 0 } = {}) {
+  if (!rustles) buildRustles();
   const t = actx.currentTime + 0.01 + delay;
-  // contact: band-limited noise, eased 12 ms rise, ~28 ms fall
-  const n = actx.createBufferSource(), bp = actx.createBiquadFilter(), ng = actx.createGain();
-  n.buffer = tapNoise; bp.type = 'bandpass'; bp.frequency.value = freq * 2.4; bp.Q.value = 0.8;
-  const soft = actx.createBiquadFilter(); soft.type = 'lowpass'; soft.frequency.value = 2500; soft.Q.value = 0.5;
-  easeIn(ng.gain, peak, t, TAP_RISE);
-  ng.gain.exponentialRampToValueAtTime(0.0001, t + TAP_RISE + 0.028);
-  n.connect(bp).connect(soft).connect(ng).connect(master);
-  n.start(t, Math.random() * 0.4); n.stop(t + TAP_RISE + 0.04);
-  // body: a very short, quiet tone that drops in pitch
-  const o = actx.createOscillator(), og = actx.createGain();
-  o.type = 'sine'; o.frequency.setValueAtTime(freq, t); o.frequency.exponentialRampToValueAtTime(freq * 0.7, t + TAP_RISE + 0.018);
-  easeIn(og.gain, peak * 0.5, t, TAP_RISE);
-  og.gain.exponentialRampToValueAtTime(0.0001, t + TAP_RISE + 0.018);
-  o.connect(og).connect(master);
-  o.start(t); o.stop(t + TAP_RISE + 0.03);
+  const src = actx.createBufferSource(), hp = actx.createBiquadFilter(), lp = actx.createBiquadFilter(), g = actx.createGain();
+  src.buffer = rustles[Math.floor(Math.random() * rustles.length)];
+  src.playbackRate.value = rate * (0.94 + Math.random() * 0.12);
+  hp.type = 'highpass'; hp.frequency.value = 1500; hp.Q.value = 0.5;
+  lp.type = 'lowpass'; lp.frequency.value = 4000; lp.Q.value = 0.5;
+  g.gain.value = peak * 0.5;              // matched to the old tap's loudness
+  src.connect(hp).connect(lp).connect(g).connect(master);
+  src.start(t);
 }
 // Win: soft muted plucks (the "Pluck" test's win).
 function pluck(freq, delay) {
@@ -636,13 +637,13 @@ function sfx(name) {
 function playSfx(name) {
   if (!soundOn || !actx || actx.state !== 'running') return;
   switch (name) {
-    case 'place':      tap(600); break;
-    case 'foundation': tap(680); break;
-    case 'draw':       tap(700, { peak: 0.035 }); break;
-    case 'undo':       tap(520, { peak: 0.035 }); break;
-    case 'recycle':    tap(600, { peak: 0.035 }); tap(680, { peak: 0.035, delay: 0.09 }); break;
-    case 'shuffle':    for (let i = 0; i < 3; i++) tap(600 + i * 40, { peak: 0.03, delay: i * 0.08 }); break;
-    case 'nope':       tap(440, { peak: 0.035 }); break;
+    case 'place':      rustle(); break;
+    case 'foundation': rustle({ rate: 1.08 }); break;
+    case 'draw':       rustle({ peak: 0.09, rate: 1.12 }); break;
+    case 'undo':       rustle({ peak: 0.09, rate: 0.9 }); break;
+    case 'recycle':    rustle({ peak: 0.09, rate: 0.8 }); rustle({ peak: 0.07, rate: 0.85, delay: 0.06 }); break;
+    case 'shuffle':    for (let i = 0; i < 3; i++) rustle({ peak: 0.08, delay: i * 0.07 }); break;
+    case 'nope':       rustle({ peak: 0.07, rate: 0.7 }); break;
     case 'win':        [330, 415, 494, 659].forEach((f, i) => pluck(f, i * 0.13)); break;
   }
 }
@@ -772,7 +773,7 @@ document.addEventListener('touchend', e => {
 document.addEventListener('dblclick', e => e.preventDefault());
 
 if (!load()) deal(Date.now()); else { layout(); $('time').textContent = fmt(S.time); }
-const APP_VERSION = 'v49';
+const APP_VERSION = 'v50';
 $('ver').textContent = 'Version ' + APP_VERSION;
 function toast(msg, ms = 3000) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
