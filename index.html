@@ -53,6 +53,17 @@
                  padding:14px 14px calc(14px + env(safe-area-inset-bottom)); display:grid; gap:10px; }
   #menu .sheet button { color:#111; background:#fff; padding:14px; font-size:17px; }
   #menu .sheet button.on { background:#166e3c; color:#fff; }
+  #stats { position:fixed; inset:0; display:none; align-items:flex-end; justify-content:center; background:rgba(0,0,0,.45); z-index:2000; }
+  #stats.show { display:flex; }
+  #stats .sheet { background:#f2f2f7; color:#111; width:100%; max-width:480px; border-radius:16px 16px 0 0;
+                  padding:16px 18px calc(16px + env(safe-area-inset-bottom)); font-size:16px; }
+  #stats h3 { margin:0 0 10px; }
+  #stats table { width:100%; border-collapse:collapse; margin-bottom:14px; font-variant-numeric:tabular-nums; }
+  #stats th, #stats td { padding:8px 4px; text-align:right; border-bottom:1px solid #ddd; }
+  #stats th:first-child, #stats td:first-child { text-align:left; }
+  #stats button { width:100%; background:var(--felt); padding:14px; font-size:17px; margin-top:8px; }
+  #stats button.plain { background:#fff; color:#c00; }
+  .best { color:#166e3c; font-weight:700; }
   #install { position:fixed; inset:0; display:none; align-items:flex-end; justify-content:center; background:rgba(0,0,0,.45); z-index:2000; }
   #install.show { display:flex; }
   #install .sheet { background:#f2f2f7; color:#111; width:100%; max-width:480px; border-radius:16px 16px 0 0;
@@ -79,12 +90,19 @@
     <button id="installBtn" hidden>Install</button>
   </footer>
 </div>
-<div id="win"><div><h2>You won! 🎉</h2><p id="winText"></p><button id="winNew">Play again</button></div></div>
+<div id="win"><div><h2>You won! 🎉</h2><p id="winText"></p><p id="winBest" class="best"></p><button id="winNew">Play again</button></div></div>
 <div id="menu"><div class="sheet">
   <button id="draw1">Draw 1</button>
   <button id="draw3">Draw 3</button>
+  <button id="statsBtn">Statistics</button>
   <button id="restart">Restart this deal</button>
   <button id="menuClose">Close</button>
+</div></div>
+<div id="stats"><div class="sheet">
+  <h3>Statistics</h3>
+  <table><thead><tr><th></th><th>Draw 1</th><th>Draw 3</th></tr></thead><tbody id="statsBody"></tbody></table>
+  <button id="statsReset" class="plain">Reset statistics</button>
+  <button id="statsClose">Close</button>
 </div></div>
 <div id="install"><div class="sheet">
   <h3>Install Solitaire</h3>
@@ -120,6 +138,7 @@ function shuffled(seed) {
 }
 
 function deal(seed) {
+  if (S && S.moves && !S.won) recordPlayed();
   dealSeed = seed;
   const d = shuffled(seed);
   S = { stock: [], waste: [], f: [[], [], [], []], t: [[], [], [], [], [], [], []], moves: 0, time: 0, won: false };
@@ -186,6 +205,7 @@ function after() {
   if (S.f.every(f => f.length === 13) && !S.won) {
     S.won = true;
     $('winText').textContent = `${S.moves} moves in ${fmt(S.time)}`;
+    $('winBest').textContent = recordWin();
     setTimeout(() => $('win').classList.add('show'), 400);
   }
   save(); layout();
@@ -370,10 +390,56 @@ $('hintBtn').onclick = () => {
 $('menuBtn').onclick = () => $('menu').classList.add('show');
 $('menuClose').onclick = () => $('menu').classList.remove('show');
 $('menu').onclick = e => { if (e.target.id === 'menu') $('menu').classList.remove('show'); };
-const setDraw = n => { $('menu').classList.remove('show'); if (n === drawCount) return; drawCount = n; deal(Date.now()); };
+const setDraw = n => { $('menu').classList.remove('show'); if (n === drawCount) return;
+  if (S.moves && !S.won) recordPlayed();   // count the abandoned game under its own mode
+  S.moves = 0; drawCount = n; deal(Date.now()); };
 $('draw1').onclick = () => setDraw(1);
 $('draw3').onclick = () => setDraw(3);
 $('restart').onclick = () => { $('menu').classList.remove('show'); deal(dealSeed); };
+
+// ---------- statistics (per device, separate for Draw 1 and Draw 3) ----------
+const blankStats = () => ({ played: 0, won: 0, bestTime: null, bestMoves: null, streak: 0, bestStreak: 0 });
+function loadStats() {
+  try { const o = JSON.parse(localStorage.getItem('sol-stats')); if (o && o[1] && o[3]) return o; } catch {}
+  return { 1: blankStats(), 3: blankStats() };
+}
+let stats = loadStats();
+const saveStats = () => { try { localStorage.setItem('sol-stats', JSON.stringify(stats)); } catch {} };
+function recordPlayed() {
+  const st = stats[drawCount]; st.played++; st.streak = 0; saveStats();
+}
+function recordWin() {
+  const st = stats[drawCount], news = [];
+  st.played++; st.won++; st.streak++;
+  st.bestStreak = Math.max(st.bestStreak, st.streak);
+  if (st.bestTime === null || S.time < st.bestTime) { if (st.bestTime !== null) news.push('best time'); st.bestTime = S.time; }
+  if (st.bestMoves === null || S.moves < st.bestMoves) { if (st.bestMoves !== null) news.push('fewest moves'); st.bestMoves = S.moves; }
+  saveStats();
+  return news.length ? 'New ' + news.join(' and ') + '! 🏆'
+                     : `Best: ${fmt(st.bestTime)} · ${st.bestMoves} moves`;
+}
+function showStats() {
+  const a = stats[1], b = stats[3], pct = st => st.played ? Math.round(100 * st.won / st.played) + '%' : '–';
+  const rows = [
+    ['Games played', a.played, b.played],
+    ['Games won', a.won, b.won],
+    ['Win rate', pct(a), pct(b)],
+    ['Best time', a.bestTime === null ? '–' : fmt(a.bestTime), b.bestTime === null ? '–' : fmt(b.bestTime)],
+    ['Fewest moves', a.bestMoves ?? '–', b.bestMoves ?? '–'],
+    ['Win streak', a.streak, b.streak],
+    ['Best streak', a.bestStreak, b.bestStreak],
+  ];
+  $('statsBody').innerHTML = rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join('');
+  $('menu').classList.remove('show');
+  $('stats').classList.add('show');
+}
+$('statsBtn').onclick = showStats;
+$('statsClose').onclick = () => $('stats').classList.remove('show');
+$('stats').onclick = e => { if (e.target.id === 'stats') $('stats').classList.remove('show'); };
+$('statsReset').onclick = () => {
+  if (!confirm('Reset all statistics?')) return;
+  stats = { 1: blankStats(), 3: blankStats() }; saveStats(); showStats();
+};
 
 // ---------- timer ----------
 const fmt = s => Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
