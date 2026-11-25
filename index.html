@@ -589,10 +589,10 @@ function slide(f1, f2, { peak = 0.05, attack = 0.07, hold = 0.04, release = 0.14
   const src = actx.createBufferSource(), hp = actx.createBiquadFilter(), bp = actx.createBiquadFilter(),
         lp = actx.createBiquadFilter(), g = actx.createGain();
   src.buffer = pinkBuf; src.loop = true;
-  hp.type = 'highpass'; hp.frequency.value = 500;
-  lp.type = 'lowpass'; lp.frequency.value = 1800; lp.Q.value = 0.5;
-  const lp2 = actx.createBiquadFilter(); lp2.type = 'lowpass'; lp2.frequency.value = 2000; lp2.Q.value = 0.5;   // steeper roll-off = less grain
-  bp.type = 'bandpass'; bp.Q.value = 1.6;   // narrower = smoother, less scratchy
+  hp.type = 'highpass'; hp.frequency.value = 900;   // less body = wispier
+  lp.type = 'lowpass'; lp.frequency.value = 2300; lp.Q.value = 0.5;
+  const lp2 = actx.createBiquadFilter(); lp2.type = 'lowpass'; lp2.frequency.value = 2500; lp2.Q.value = 0.5;   // steeper roll-off = less grain
+  bp.type = 'bandpass'; bp.Q.value = 0.8;   // wide = breathy, airy
   const v = 0.93 + Math.random() * 0.14;
   bp.frequency.setValueAtTime(f1 * v, t);
   bp.frequency.exponentialRampToValueAtTime(f2 * v, end);   // exponential: flat at first, lifts toward the end
@@ -753,7 +753,7 @@ document.addEventListener('touchend', e => {
 document.addEventListener('dblclick', e => e.preventDefault());
 
 if (!load()) deal(Date.now()); else { layout(); $('time').textContent = fmt(S.time); }
-const APP_VERSION = 'v34';
+const APP_VERSION = 'v35';
 $('ver').textContent = 'Version ' + APP_VERSION;
 function toast(msg, ms = 3000) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
