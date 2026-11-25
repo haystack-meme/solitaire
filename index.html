@@ -597,7 +597,7 @@ function tap(freq, { peak = 0.05, delay = 0 } = {}) {
     const d = tapNoise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
   }
   const t = actx.currentTime + 0.01 + delay;
-  // contact: band-limited noise, 2 ms rise, ~25 ms fall
+  // contact: band-limited noise, 4 ms rise, ~30 ms fall
   const n = actx.createBufferSource(), bp = actx.createBiquadFilter(), ng = actx.createGain();
   n.buffer = tapNoise; bp.type = 'bandpass'; bp.frequency.value = freq * 2.4; bp.Q.value = 0.8;
   const soft = actx.createBiquadFilter(); soft.type = 'lowpass'; soft.frequency.value = 2500; soft.Q.value = 0.5;
