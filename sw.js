@@ -1,5 +1,5 @@
 // Bump VERSION on every change so installed apps pick up the new files.
-const VERSION = 'solitaire-v1';
+const VERSION = 'solitaire-v2';
 const FILES = ['./', 'index.html', 'manifest.webmanifest', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
