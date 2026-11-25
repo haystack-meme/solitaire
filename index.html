@@ -29,6 +29,10 @@
   button { touch-action:manipulation; }
   #verTag { position:absolute; right:calc(8px + env(safe-area-inset-right)); bottom:calc(2px + env(safe-area-inset-bottom));
             font-size:10px; color:rgba(255,255,255,.35); pointer-events:none; }
+  #toast { position:fixed; left:50%; top:calc(56px + env(safe-area-inset-top)); transform:translate(-50%,-12px);
+           background:rgba(0,0,0,.75); color:#fff; padding:9px 16px; border-radius:20px; font-size:14px;
+           opacity:0; pointer-events:none; transition:opacity .3s, transform .3s; z-index:3000; white-space:nowrap; }
+  #toast.show { opacity:1; transform:translate(-50%,0); }
   button:active { background:rgba(0,0,0,.45); }
   button[hidden] { display:none; }
   .slot { position:absolute; width:var(--cw); height:var(--ch); border-radius:calc(var(--cw)*.12);
@@ -93,6 +97,7 @@
     <button id="installBtn" hidden>Install</button>
   </footer>
   <div id="verTag"></div>
+  <div id="toast"></div>
 </div>
 <div id="win"><div><h2>You won! 🎉</h2><p id="winText"></p><p id="winBest" class="best"></p><button id="winNew">Play again</button></div></div>
 <div id="menu"><div class="sheet">
@@ -609,8 +614,18 @@ document.addEventListener('touchend', e => {
 document.addEventListener('dblclick', e => e.preventDefault());
 
 if (!load()) deal(Date.now()); else { layout(); $('time').textContent = fmt(S.time); }
-const APP_VERSION = 'v18';
+const APP_VERSION = 'v19';
 $('ver').textContent = 'Version ' + APP_VERSION;
+function toast(msg, ms = 3000) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => t.classList.remove('show'), ms);
+}
+// Remember the last version this device ran; announce when it changes (not on first install).
+try {
+  const seen = localStorage.getItem('sol-version');
+  if (seen && seen !== APP_VERSION) setTimeout(() => toast('Updated to ' + APP_VERSION), 500);
+  localStorage.setItem('sol-version', APP_VERSION);
+} catch {}
 $('verTag').textContent = APP_VERSION;
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
 
